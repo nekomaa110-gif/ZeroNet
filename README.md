@@ -148,7 +148,7 @@ Detail koneksi router, poller, cache, dan alur voucher ada di [docs/ARSITEKTUR.m
 | Komponen | Versi | Sumber |
 |---|---|---|
 | PHP | 8.3 atau lebih baru | `composer.json` (`^8.3`) |
-| Laravel | 13 (terkunci v13.5.0) | `composer.lock` |
+| Laravel | 13 (terkunci v13.34.0) | `composer.lock` |
 | Ekstensi PHP | `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `xml`/`dom`, `ctype`, `fileinfo`, `iconv`; `ftp` untuk backup router lewat FTP; `zip` untuk `logs:archive`; `redis` kalau memakai Redis dengan `phpredis` | `composer check-platform-reqs` dan kode |
 | Composer | 2.x | |
 | Node.js | `^20.19` atau `>=22.12` | `engines` Vite 8 di `package-lock.json` |

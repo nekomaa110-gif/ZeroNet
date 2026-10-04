@@ -14,5 +14,11 @@
     "pino": "^9.5.0",
     "puppeteer": "^24.43.0",
     "qrcode": "^1.5.4"
+  },
+  "overrides": {
+    "libsignal": {
+      "protobufjs": "^7.6.6"
+    },
+    "qs": "^6.16.0"
   }
 }
