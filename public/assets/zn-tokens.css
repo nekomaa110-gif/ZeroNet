@@ -1,0 +1,243 @@
+:root {
+  color-scheme: light;
+
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-cond: 'IBM Plex Sans Condensed', 'IBM Plex Sans', 'Arial Narrow', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 30px;
+  --fs-4xl: 38px;
+  --fs-5xl: 48px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 48px;
+  --s-9: 64px;
+
+  --r-xs: 2px;
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r-lg: 6px;
+  --r-xl: 8px;
+  --r-pill: 999px;
+
+  --dur-fast: .12s;
+  --dur: .2s;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+
+  --bg: #E9ECEA;
+  --surface: #FFFFFF;
+  --surface-2: #F6F7F6;
+  --sunken: #E1E5E2;
+  --line: #D3D9D5;
+  --line-strong: #B7BFB9;
+  --field-line: #7B847E;
+  --ink: #141815;
+  --ink-2: #434B46;
+  --ink-3: #5B645E;
+  --ink-inverse: #F1F4F2;
+
+  --rack: #151A17;
+  --rack-2: #1D2320;
+  --rack-line: #2A322E;
+  --rack-ink: #E3E8E5;
+  --rack-ink-2: #A3ADA7;
+
+  --brand: #0A6B55;
+  --brand-hover: #085945;
+  --brand-ink: #0A6B55;
+  --brand-tint: #E2F0EA;
+  --brand-line: #9CCAB8;
+  --on-brand: #FFFFFF;
+  --brand-bright: #3FD3A0;
+
+  --ok: #1F7A45;
+  --ok-tint: #E3F2E8;
+  --warn: #915B00;
+  --warn-tint: #FBEFD6;
+  --err: #B3261E;
+  --err-tint: #FBE6E3;
+  --info: #2C5E8C;
+  --info-tint: #E3ECF5;
+
+  --led-ok: #22B35E;
+  --led-warn: #E3A21A;
+  --led-err: #E0443A;
+  --led-off: #8B948F;
+
+  --wa: #0E7A3E;
+  --wa-hover: #0B6433;
+
+  --chart-1: #0E8A67;
+  --chart-2: #C0710F;
+  --chart-3: #3D6FB6;
+  --chart-other: #8B948F;
+  --chart-grid: rgba(20, 24, 21, .08);
+  --chart-tick: #5B645E;
+
+  --shadow-1: 0 1px 0 rgba(20, 24, 21, .05);
+  --shadow-pop: 0 16px 40px -12px rgba(10, 14, 12, .32), 0 2px 6px rgba(10, 14, 12, .08);
+  --scrim: rgba(10, 14, 12, .52);
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand);
+
+  --bg-elev: var(--surface);
+  --bg-mute: var(--sunken);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --text: var(--ink);
+  --text-2: var(--ink-2);
+  --text-3: var(--ink-3);
+  --brand-1: var(--brand);
+  --brand-2: var(--brand);
+  --brand-3: var(--brand);
+  --brand-grad: var(--brand);
+  --brand-grad-soft: var(--brand-tint);
+  --glass-bg: var(--surface);
+  --glass-border: var(--line);
+  --ring: var(--focus-ring);
+  --radius: var(--r-lg);
+  --shadow: var(--shadow-1);
+  --shadow-sm: var(--shadow-1);
+  --shadow-md: var(--shadow-1);
+  --shadow-lg: var(--shadow-pop);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0E1110;
+    --surface: #161A18;
+    --surface-2: #1B201D;
+    --sunken: #0A0C0B;
+    --line: #262C29;
+    --line-strong: #38403C;
+    --field-line: #66706A;
+    --ink: #E8ECE9;
+    --ink-2: #B0B8B3;
+    --ink-3: #8B948F;
+    --ink-inverse: #141815;
+    --rack: #0A0C0B;
+    --rack-2: #131715;
+    --rack-line: #222825;
+    --brand: #48C49B;
+    --brand-hover: #5CCBA6;
+    --brand-ink: #5CCBA6;
+    --brand-tint: #16302A;
+    --brand-line: #2C5E4F;
+    --on-brand: #07140F;
+    --ok: #5BC983;
+    --ok-tint: #15301F;
+    --warn: #E6B04A;
+    --warn-tint: #33280F;
+    --err: #F08A80;
+    --err-tint: #3A1A17;
+    --info: #86B4E0;
+    --info-tint: #172838;
+    --chart-1: #27A07A;
+    --chart-2: #C8822A;
+    --chart-3: #5C8FD6;
+    --chart-other: #6E7772;
+    --chart-grid: rgba(232, 236, 233, .08);
+    --chart-tick: #8B948F;
+    --shadow-1: 0 1px 0 rgba(0, 0, 0, .4);
+    --shadow-pop: 0 20px 48px -12px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .4);
+    --scrim: rgba(0, 0, 0, .66);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0E1110;
+  --surface: #161A18;
+  --surface-2: #1B201D;
+  --sunken: #0A0C0B;
+  --line: #262C29;
+  --line-strong: #38403C;
+  --field-line: #66706A;
+  --ink: #E8ECE9;
+  --ink-2: #B0B8B3;
+  --ink-3: #8B948F;
+  --ink-inverse: #141815;
+  --rack: #0A0C0B;
+  --rack-2: #131715;
+  --rack-line: #222825;
+  --brand: #48C49B;
+  --brand-hover: #5CCBA6;
+  --brand-ink: #5CCBA6;
+  --brand-tint: #16302A;
+  --brand-line: #2C5E4F;
+  --on-brand: #07140F;
+  --ok: #5BC983;
+  --ok-tint: #15301F;
+  --warn: #E6B04A;
+  --warn-tint: #33280F;
+  --err: #F08A80;
+  --err-tint: #3A1A17;
+  --info: #86B4E0;
+  --info-tint: #172838;
+  --chart-1: #27A07A;
+  --chart-2: #C8822A;
+  --chart-3: #5C8FD6;
+  --chart-other: #6E7772;
+  --chart-grid: rgba(232, 236, 233, .08);
+  --chart-tick: #8B948F;
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, .4);
+  --shadow-pop: 0 20px 48px -12px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .4);
+  --scrim: rgba(0, 0, 0, .66);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+:focus:not(:focus-visible) { outline: none; }
+
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+.sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.skip-link {
+  position: absolute; left: var(--s-3); top: -60px; z-index: 200;
+  padding: var(--s-2) var(--s-4);
+  background: var(--ink); color: var(--ink-inverse);
+  font-weight: 600; text-decoration: none; border-radius: var(--r-md);
+}
+.skip-link:focus { top: var(--s-3); }
+
+.led {
+  display: inline-block; flex: none;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--led-off);
+}
+.led.ok { background: var(--led-ok); }
+.led.warn { background: var(--led-warn); }
+.led.err { background: var(--led-err); }
+.led.pulse { animation: zn-led 2s ease-in-out infinite; }
+@keyframes zn-led {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--led-ok) 45%, transparent); }
+  60% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--led-ok) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

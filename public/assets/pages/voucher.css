@@ -1,0 +1,239 @@
+.vg-step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; color: var(--ink-3); }
+.vg-step b { display: block; font-size: 13.5px; color: var(--ink-3); }
+.vg-step span:last-child { font-size: 12.5px; }
+.vg-step.on b, .vg-step.done b { color: var(--ink); }
+.vg-step.on, .vg-step.done { color: var(--ink-2); }
+.vg-dot { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--line-strong); }
+.vg-step.on .vg-dot { border-color: var(--brand); border-top-color: transparent; animation: spin .8s linear infinite; }
+.vg-step.done .vg-dot { border-color: var(--ok); background: var(--ok); }
+.vg-step.err .vg-dot { border-color: var(--err); background: var(--err); }
+.vg-count { margin-top: 8px; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.vg-note { margin-top: 14px; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.vg-foot-info { font-size: 12px; color: var(--ink-2); }
+.vs-profil { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
+.vs-code { max-height: 260px; margin: 0; padding: 12px; overflow: auto; background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-md); font-family: var(--font-mono); font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.vs-facts { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 13px; color: var(--ink-2); }
+.vs-facts b { color: var(--ink); }
+.vp-sec { margin: 4px 0 12px; font-family: var(--font-cond); font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.vp-sec + .mdl-grid { margin-bottom: 20px; }
+.vp-warn { margin-bottom: 14px; padding: 10px 12px; border-radius: var(--r-md); background: var(--warn-tint); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); font-size: 13px; line-height: 1.55; }
+.vp-warn[hidden] { display: none; }
+.pg-voucher-check-index .vc-load { display:flex; align-items:center; gap:14px; }
+.pg-voucher-check-index .vc-load svg { animation: spin 1s linear infinite; color: var(--brand-ink); flex:none; }
+.pg-voucher-check-index .vc-load b { display:block; font-size:14px; }
+.pg-voucher-check-index .vc-load span { color:var(--ink-2); font-size:12.5px; }
+.pg-voucher-check-index .vc-load i { font-style:normal; color:var(--ink-3); }
+.pg-voucher-check-index .vc-skel { margin-top:18px; display:grid; gap:10px; }
+.pg-voucher-check-index .vc-skel .row { display:grid; grid-template-columns:1fr 1fr; gap:10px 28px; }
+.verdict.verdict-ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.verdict.verdict-warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.verdict.verdict-err { border-color: color-mix(in srgb, var(--err) 45%, var(--line)); }
+.verdict-title { display: flex; align-items: center; gap: 8px; }
+.fs-13 { font-size: 13px; }
+.mt-1 { margin-top: 4px; }
+.pg-penjualan .pj-readout { margin-bottom: 12px; }
+.pg-penjualan .pj-kosong { font-size: 18px; color: var(--ink-3); font-weight: 500; }
+.pg-penjualan .pj-notes { display: grid; gap: 8px; margin-bottom: 12px; }
+.pg-penjualan .pj-tgl { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.pg-penjualan .pj-tgl .input { width: auto; }
+.pg-penjualan .pj-prefix { width: 130px; }
+.pg-penjualan .section-bar { flex-wrap: wrap; row-gap: 6px; }
+.pg-penjualan .pj-ekspor { display: flex; gap: 6px; }
+@media (max-width: 560px) {
+  .pg-penjualan .pj-tgl { flex: 1 1 100%; }
+  .pg-penjualan .pj-tgl .input { flex: 1; min-width: 0; }
+  .pg-penjualan .pj-prefix { flex: 1 1 100%; width: auto; }
+}
+.im-pilih { display: flex; align-items: flex-end; gap: 10px; }
+.im-pilih .field { margin: 0; }
+.im-hasil { margin-top: 14px; }
+.im-angka { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0 0 10px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.im-angka > div { padding: 10px 12px; border-left: 1px solid var(--line); min-width: 0; }
+.im-angka > div:first-child { border-left: 0; }
+.im-angka dt { font-family: var(--font-cond); font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.im-angka dd { margin: 4px 0 0; font-size: 20px; font-weight: 600; color: var(--ink); }
+.im-batch { max-height: 240px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-md); }
+@media (max-width: 560px) {
+  .im-pilih { flex-direction: column; align-items: stretch; }
+  .im-angka { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .im-angka > div:nth-child(3) { border-left: 0; }
+  .im-angka > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 1100px) {
+  .pg-penjualan .pj-lebar { display: none; }
+}
+.pg-penjualan .pj-sub { display: none; font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+@media (max-width: 700px) {
+  .pg-penjualan .pj-opt { display: none; }
+  .pg-penjualan .pj-sub { display: block; }
+}
+.vc-penuh { grid-column: 1 / -1; }
+.pg-template-cetak .page-head { margin-bottom: 18px; }
+.pg-template-cetak .tc-default { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 12px var(--pad-card, 16px); margin-bottom: 16px; }
+.pg-template-cetak .tc-default-judul { flex: 0 0 200px; }
+.pg-template-cetak .tc-default-judul h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.pg-template-cetak .tc-default-judul p { margin: 2px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.4; }
+.pg-template-cetak .tc-default-isi { flex: 1 1 560px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 16px; }
+.pg-template-cetak .tc-default-baris { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; }
+.pg-template-cetak .tc-default-baris > span { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.pg-template-cetak .tc-kerja { overflow: hidden; }
+.pg-template-cetak .tc-pilih { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px var(--pad-card, 16px); border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.pg-template-cetak .tc-pilih-item, .pg-template-cetak .tc-pilih-baru { flex: 0 1 240px; min-width: 180px; min-height: 52px; display: grid; gap: 4px; align-content: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.pg-template-cetak .tc-pilih-item:hover, .pg-template-cetak .tc-pilih-baru:hover { border-color: var(--line-strong); }
+.pg-template-cetak .tc-pilih-item.is-aktif, .pg-template-cetak .tc-pilih-baru.is-aktif { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+.pg-template-cetak .tc-pilih-item:focus-visible, .pg-template-cetak .tc-pilih-baru:focus-visible, .pg-template-cetak .tc-var-item:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.pg-template-cetak .tc-pilih-nama { font-size: 13.5px; font-weight: 600; }
+.pg-template-cetak .tc-pilih-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 12px; color: var(--ink-3); }
+.pg-template-cetak .tc-pilih-meta .badge { font-size: 11px; padding: 1px 6px; }
+.pg-template-cetak .tc-pilih-baru { flex-basis: 160px; min-width: 150px; place-content: center; border-style: dashed; color: var(--ink-2); font-size: 13px; font-weight: 600; text-align: center; }
+.pg-template-cetak .tc-kosong { padding: 12px var(--pad-card, 16px); margin: 0; font-size: 13px; }
+.pg-template-cetak .tc-kepala { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 14px var(--pad-card, 16px); border-bottom: 1px solid var(--line); }
+.pg-template-cetak .tc-f-nama { flex: 1 1 220px; }
+.pg-template-cetak .tc-f-susunan { flex: 0 1 260px; }
+.pg-template-cetak .tc-tindakan { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.pg-template-cetak .tc-status { min-width: 104px; margin-right: 4px; font-size: 12.5px; color: var(--ink-3); text-align: right; }
+.pg-template-cetak .tc-status.is-kotor { color: var(--warn); font-weight: 600; }
+.pg-template-cetak .tc-pesan { display: grid; gap: 8px; padding: 12px var(--pad-card, 16px) 0; }
+.pg-template-cetak .tc-pesan .mdl-alert { margin: 0; }
+.pg-template-cetak .tc-peringatan { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); background: var(--warn-tint, rgba(234, 179, 8, .12)); color: var(--warn); font-size: 12.5px; }
+.pg-template-cetak .tc-badan { --tc-tinggi: clamp(260px, 45vh, 420px); display: grid; gap: 16px; padding: 14px var(--pad-card, 16px) var(--pad-card, 16px); }
+.pg-template-cetak .tc-kolom { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pg-template-cetak .tc-kolom-kepala { display: flex; gap: 10px; align-items: center; min-height: 30px; font-size: 12.5px; }
+.pg-template-cetak .tc-kolom-kepala label, .pg-template-cetak .tc-kolom-judul { font-weight: 600; color: var(--ink-2); }
+.pg-template-cetak .tc-kolom-kepala .btn { margin-left: auto; }
+.pg-template-cetak .tc-html { height: var(--tc-tinggi); min-height: 200px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre; resize: vertical; }
+.pg-template-cetak .tc-pratinjau { width: 100%; height: var(--tc-tinggi); border: 1px solid var(--line); border-radius: var(--r-md); background: #fff; }
+.pg-template-cetak .tc-bantuan { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.pg-template-cetak .tc-bantuan p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+.pg-template-cetak .tc-var { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.pg-template-cetak .tc-var-item { display: grid; gap: 2px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-sm, 4px); background: var(--surface); color: var(--ink-3); text-align: left; font: inherit; font-size: 11.5px; line-height: 1.35; cursor: pointer; }
+.pg-template-cetak .tc-var-item code { font-size: 12px; color: var(--ink); background: none; padding: 0; }
+.pg-template-cetak .tc-var-item:hover { border-color: var(--brand); }
+@media (min-width: 1280px) {
+  .pg-template-cetak .tc-badan { --tc-tinggi: clamp(300px, calc(100vh - 380px), 640px); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .pg-template-cetak .tc-default-judul { flex-basis: 100%; }
+  .pg-template-cetak .tc-default-isi { flex-basis: 100%; grid-template-columns: 1fr; }
+  .pg-template-cetak .tc-default-baris { grid-template-columns: 1fr; gap: 4px; }
+  .pg-template-cetak .tc-pilih-item { flex: 1 1 100%; }
+  .pg-template-cetak .tc-pilih-baru { flex: 1 1 100%; min-height: 44px; }
+  .pg-template-cetak .tc-f-nama, .pg-template-cetak .tc-f-susunan { flex-basis: 100%; }
+  .pg-template-cetak .tc-tindakan { margin-left: 0; width: 100%; }
+  .pg-template-cetak .tc-status { flex-basis: 100%; order: -2; min-width: 0; text-align: left; }
+  .pg-template-cetak .tc-tindakan .btn-primary { order: -1; flex: 1 1 100%; }
+  .pg-template-cetak .tc-badan { --tc-tinggi: 300px; }
+}
+.pg-voucher-index .vc-readout { margin-bottom: 16px; }
+.pg-voucher-index .vb-kode .mono { white-space: nowrap; }
+.pg-voucher-index .vb-sub, .pg-voucher-index .vb-unit { display: none; }
+.pg-voucher-index .vb-sync { min-width: 140px; }
+.pg-voucher-index .vb-sync .progress { margin-top: 6px; }
+.pg-voucher-index .vb-sync-info { margin-top: 3px; font-size: 11.5px; color: var(--ink-2); }
+.pg-voucher-index .vb-aksi { width: 1%; }
+.pg-voucher-index .vb-aksi .tbl-actions { max-width: none; flex-wrap: nowrap; }
+@media (max-width: 1100px) {
+  .pg-voucher-index .vb-lebar { display: none; }
+  .pg-voucher-index .vb-sub { display: block; }
+}
+@media (max-width: 700px) {
+  .pg-voucher-index .tbl-wrap { overflow: visible; }
+  .pg-voucher-index .tbl thead { display: none; }
+  .pg-voucher-index .tbl, .pg-voucher-index .tbl tbody { display: block; }
+  .pg-voucher-index .tbl tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px;
+    grid-template-areas: "kode aksi" "router router" "sync jumlah";
+    padding: 12px var(--pad-card); border-bottom: 1px solid var(--line);
+  }
+  .pg-voucher-index .tbl tbody tr:last-child { border-bottom: 0; }
+  .pg-voucher-index .tbl tbody td { display: block; min-width: 0; padding: 0; border: 0; }
+  .pg-voucher-index .tbl tbody td.vb-lebar { display: none; }
+  .pg-voucher-index .vb-kode { grid-area: kode; }
+  .pg-voucher-index .vb-kode .mono { white-space: normal; overflow-wrap: anywhere; }
+  .pg-voucher-index .vb-router { grid-area: router; }
+  .pg-voucher-index .vb-sync { grid-area: sync; min-width: 0; }
+  .pg-voucher-index .vb-jumlah { grid-area: jumlah; align-self: start; }
+  .pg-voucher-index .vb-unit { display: inline; font-family: var(--font-sans); color: var(--ink-3); }
+  .pg-voucher-index .vb-aksi { grid-area: aksi; width: auto; }
+  .pg-voucher-index .tbl tbody tr:has(> td.vl-pilih) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "pilih kode aksi" "pilih router router" "pilih sync jumlah";
+  }
+  .pg-voucher-index .tbl tbody td.vl-pilih { grid-area: pilih; align-self: start; width: auto; padding-top: 2px; }
+}
+@media (max-width: 560px) {
+  .pg-voucher-index .head-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pg-voucher-index .head-actions .btn-ghost { grid-column: 1 / -1; order: 3; }
+  .pg-voucher-index .toolbar .tb-end { width: 100%; }
+  .pg-voucher-index .vl-massal-teks { flex: 1 1 auto; }
+  .pg-voucher-index .vl-massal .vl-massal-aksi { display: contents; }
+  .pg-voucher-index .vl-massal [data-massal-hapus] { flex: 1 1 auto; }
+  .pg-voucher-index .toolbar .tb-end .btn { flex: 1; }
+}
+.pg-voucher-batch .vb-judul { font-size: 22px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.pg-voucher-batch .vb-ringkas { margin-bottom: 16px; }
+.pg-voucher-batch .vb-status { display: grid; gap: 10px; padding: 16px var(--pad-card); border-bottom: 1px solid var(--line); }
+.pg-voucher-batch .vb-status-atas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.pg-voucher-batch .vb-hitung { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pg-voucher-batch .vb-galat { font-size: 12.5px; color: var(--err); }
+.pg-voucher-batch .vb-pakai { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+.pg-voucher-batch .vb-fakta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--line); }
+.pg-voucher-batch .vb-fakta > div { min-width: 0; padding: 12px var(--pad-card); background: var(--surface); }
+.pg-voucher-batch .vb-fakta dt { font-family: var(--font-cond); font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); }
+.pg-voucher-batch .vb-fakta dd { margin: 4px 0 0; font-size: 13.5px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.pg-voucher-batch .vb-fakta dd .t-mute { margin-left: 4px; font-weight: 400; }
+.pg-voucher-batch .vb-bahaya { margin-top: 16px; border-color: color-mix(in srgb, var(--err) 30%, var(--line)); }
+.pg-voucher-batch .vb-bahaya h3 { margin: 0; padding: 12px var(--pad-card); border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+.pg-voucher-batch .vb-bahaya-baris { display: flex; align-items: center; gap: 16px; padding: 12px var(--pad-card); border-bottom: 1px solid var(--line); }
+.pg-voucher-batch .vb-bahaya-baris:last-child { border-bottom: 0; }
+.pg-voucher-batch .vb-bahaya-baris > div { flex: 1; min-width: 0; }
+.pg-voucher-batch .vb-bahaya-baris b { font-size: 13.5px; }
+.pg-voucher-batch .vb-bahaya-baris p { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-2); }
+:is(.pg-voucher-batch, .pg-voucher-index) .vb-btn-bahaya { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--line-strong)); }
+:is(.pg-voucher-batch, .pg-voucher-index) .vb-btn-bahaya:hover { background: var(--err-tint); }
+.pg-voucher-batch .vl-kosong { padding: 48px 16px; text-align: center; color: var(--ink-2); }
+.pg-voucher-batch .vl-terpakai { margin-top: 2px; font-size: 11.5px; color: var(--ink-2); }
+.pg-voucher-batch .vl-lbl { display: none; }
+.pg-voucher-batch .vl-aksi { width: 1%; }
+:is(.pg-voucher-batch, .pg-voucher-index) .vl-pilih { width: 1%; padding-right: 0; }
+:is(.pg-voucher-batch, .pg-voucher-index) .vl-pilih input { vertical-align: middle; }
+:is(.pg-voucher-batch, .pg-voucher-index) .vl-massal { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px var(--pad-card); border-bottom: 1px solid var(--line); background: var(--sunken); font-size: 13px; }
+:is(.pg-voucher-batch, .pg-voucher-index) .vl-massal[hidden] { display: none; }
+:is(.pg-voucher-batch, .pg-voucher-index) .vl-massal-teks { font-weight: 600; color: var(--ink); }
+:is(.pg-voucher-batch, .pg-voucher-index) .vl-massal-aksi { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+:is(.pg-voucher-batch, .pg-voucher-index) .vl-pilih-hp { display: none; }
+@media (max-width: 900px) {
+  .pg-voucher-batch .vb-fakta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-voucher-batch .vb-fakta > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .pg-voucher-batch #voucher-list .tbl-wrap { overflow: visible; }
+  .pg-voucher-batch #voucher-list .tbl thead { display: none; }
+  .pg-voucher-batch #voucher-list .tbl, .pg-voucher-batch #voucher-list .tbl tbody { display: block; }
+  .pg-voucher-batch #voucher-list .tbl tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px;
+    grid-template-areas: "kode aksi" "pass aksi" "status router" "mulai akhir";
+    padding: 12px var(--pad-card); border-bottom: 1px solid var(--line);
+  }
+  :is(.pg-voucher-batch, .pg-voucher-index) .vl-pilih-hp { display: flex; align-items: center; gap: 10px; padding: 10px var(--pad-card); border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-2); cursor: pointer; }
+  .pg-voucher-batch #voucher-list .tbl tbody tr:has(> td.vl-pilih) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "pilih kode aksi" "pilih pass aksi" "pilih status router" "pilih mulai akhir";
+  }
+  .pg-voucher-batch #voucher-list .tbl tbody tr:last-child { border-bottom: 0; }
+  .pg-voucher-batch #voucher-list .tbl tbody td { display: block; min-width: 0; padding: 0; border: 0; }
+  .pg-voucher-batch #voucher-list .tbl tbody td.ix, .pg-voucher-batch #voucher-list .tbl tbody td:empty { display: none; }
+  .pg-voucher-batch .vl-kode { grid-area: kode; }
+  .pg-voucher-batch #voucher-list .tbl tbody td.vl-pilih { grid-area: pilih; align-self: start; padding-top: 2px; }
+  .pg-voucher-batch .vl-pass { grid-area: pass; font-size: 12.5px; color: var(--ink-2); }
+  .pg-voucher-batch .vl-status { grid-area: status; }
+  .pg-voucher-batch .vl-router { grid-area: router; justify-self: end; }
+  .pg-voucher-batch .vl-mulai { grid-area: mulai; }
+  .pg-voucher-batch .vl-akhir { grid-area: akhir; text-align: right; }
+  .pg-voucher-batch .vl-aksi { grid-area: aksi; width: auto; align-self: start; }
+  .pg-voucher-batch .vl-lbl { display: inline; font-family: var(--font-sans); color: var(--ink-3); }
+}
+@media (max-width: 560px) {
+  .pg-voucher-batch .vb-judul { font-size: 18px; }
+  .pg-voucher-batch .vb-bahaya-baris { flex-direction: column; align-items: stretch; gap: 10px; }
+}

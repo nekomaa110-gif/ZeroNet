@@ -1,0 +1,15 @@
+@media (max-width: 880px) {
+  .pg-operators-index #op-tbl thead th:nth-child(4), .pg-operators-index #op-tbl tbody td:nth-child(4), .pg-operators-index #op-tbl thead th:nth-child(7), .pg-operators-index #op-tbl tbody td:nth-child(7) { display: none; }
+  .pg-operators-index #op-search { max-width: 100% !important; width: 100%; }
+  .pg-operators-index .card .card-head { flex-wrap: wrap; }
+  .pg-operators-index .card .card-head .ch-actions { width: 100%; }
+}
+@media (max-width: 420px) {
+  .pg-operators-index #op-tbl thead th:nth-child(3), .pg-operators-index #op-tbl tbody td:nth-child(3) { display: none; }
+}
+@media (max-width: 880px) {
+  .pg-profile-two-factor .twofa-pair { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 880px) {
+  .pg-profile-edit .profile-row { grid-template-columns: 1fr !important; }
+}

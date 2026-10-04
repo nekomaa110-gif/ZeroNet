@@ -1,0 +1,136 @@
+.pg-packages-form .tbl-attr td { padding:8px; vertical-align:middle; }
+.pg-packages-form .tbl-attr th { padding:0 8px 8px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); border-bottom:0;background:transparent }
+.pg-packages-form .tbl-attr .input { padding:8px 10px; font-size:13px; }
+.pg-packages-form .tbl-attr tbody tr { cursor:default; }
+.pg-packages-form .tbl-attr tbody tr:hover { background:transparent !important; }
+.pg-packages-form .tbl-attr tbody td { border-bottom:0; }
+@media (max-width: 880px) {
+  .pg-packages-form form .card-pad[style*="grid-template-columns:1.5fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .pg-packages-form .tbl-attr { display: block; }
+  .pg-packages-form .tbl-attr thead { display: none; }
+  .pg-packages-form .tbl-attr tbody { display: block; }
+  .pg-packages-form .tbl-attr tbody tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--sunken);
+    position: relative;
+  }
+  .pg-packages-form .tbl-attr tbody td {
+    display: block;
+    padding: 0 !important;
+    position: relative;
+  }
+  .pg-packages-form .tbl-attr tbody td:nth-child(1) { grid-column: 1 / -1; }
+  .pg-packages-form .tbl-attr tbody td:nth-child(4) { grid-column: 1 / -1; }
+  .pg-packages-form .tbl-attr tbody td:nth-child(5) {
+    position: absolute;
+    top: 8px; right: 8px;
+    z-index: 2;
+  }
+  .pg-packages-form .tbl-attr tbody td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: 4px;
+  }
+  .pg-packages-form .tbl-attr tbody td:nth-child(1)::before { content: "Atribut"; }
+  .pg-packages-form .tbl-attr tbody td:nth-child(2)::before { content: "Operator"; }
+  .pg-packages-form .tbl-attr tbody td:nth-child(3)::before { content: "Nilai"; }
+  .pg-packages-form .tbl-attr tbody td:nth-child(4)::before { content: "Target"; }
+  .pg-packages-form .tbl-attr tbody td:nth-child(5)::before { content: ""; display: none; }
+  .pg-packages-form .tbl-attr tbody td:nth-child(5) .icon-btn {
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .pg-packages-form .tbl-attr .input { background: var(--surface); }
+}
+.pg-packages-index .pk-router { flex-wrap: wrap; }
+.pg-packages-index .pk-router button { padding: 6px 12px; font-size: 13px; font-weight: 600; }
+.pg-packages-index .pk-nama { min-width: 200px; }
+.pg-packages-index .pk-nama-atas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pg-packages-index .pk-radius-tag { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; color: var(--ink-2); }
+.pg-packages-index .pk-radius-tag .badge { font-size: 10.5px; padding: 1px 5px; }
+.pg-packages-index .pk-ringkas { display: none; margin-top: 3px; font-size: 12px; color: var(--ink-3); }
+.pg-packages-index .pk-rate { font-size: 12.5px; white-space: nowrap; }
+.pg-packages-index .pk-burst { margin-left: 6px; font-family: var(--font-sans); font-size: 11px; color: var(--ink-3); }
+.pg-packages-index .pk-mode, .pg-packages-index .pk-tbl td.num { white-space: nowrap; }
+.pg-packages-index .pk-radius-tag { white-space: nowrap; }
+.pg-packages-index .pk-aksi { width: 1%; }
+.pg-packages-index .pk-aksi .tbl-actions { max-width: none; flex-wrap: nowrap; }
+.pg-packages-index .pk-kosong { padding: 32px 16px; text-align: center; color: var(--ink-3); font-size: 13px; }
+.pg-packages-index .pk-lepas { margin-top: 16px; border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); }
+.pg-packages-index .pk-cek-baris { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.pg-packages-index .pk-cek-baris input { margin-top: 3px; }
+.pg-packages-index .pk-cek-baris b { color: var(--ink); font-weight: 600; }
+.pg-packages-index .pk-radius { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.pg-packages-index .pk-radius-info { margin: 0; font-size: 13px; color: var(--ink-2); }
+.pg-packages-index .pk-profil-tujuan { margin-bottom: 14px; }
+@media (max-width: 1440px) {
+  .pg-packages-index .pk-sempit { display: none; }
+  .pg-packages-index .pk-ringkas { display: block; }
+}
+@media (max-width: 900px) {
+  .pg-packages-index .pk-tbl thead { display: none; }
+  .pg-packages-index .tbl-wrap { overflow: visible; }
+  .pg-packages-index .pk-tbl, .pg-packages-index .pk-tbl tbody { display: block; }
+  .pg-packages-index .pk-tbl tbody tr {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px 12px;
+    grid-template-areas: "nama nama nama aksi" "rate rate rate rate" "mode masa harga kartu";
+    padding: 14px var(--pad-card); border-bottom: 1px solid var(--line);
+  }
+  .pg-packages-index .pk-tbl tbody tr:last-child { border-bottom: 0; }
+  .pg-packages-index .pk-tbl tbody td { display: block; min-width: 0; padding: 0; border: 0; text-align: left; }
+  .pg-packages-index .pk-tbl tbody td.pk-sempit { display: none; }
+  .pg-packages-index .pk-tbl .pk-nama { grid-area: nama; min-width: 0; }
+  .pg-packages-index .pk-tbl .pk-rate { grid-area: rate; }
+  .pg-packages-index .pk-tbl .pk-aksi { grid-area: aksi; width: auto; align-self: start; }
+  .pg-packages-index .pk-tbl tbody td:nth-child(4) { grid-area: mode; }
+  .pg-packages-index .pk-tbl tbody td:nth-child(5) { grid-area: masa; }
+  .pg-packages-index .pk-tbl tbody td:nth-child(6) { grid-area: harga; }
+  .pg-packages-index .pk-tbl tbody td:nth-child(9) { grid-area: kartu; text-align: right; }
+  .pg-packages-index .pk-tbl tbody td:nth-child(n+4):not(.pk-aksi)::before { display: block; font-family: var(--font-cond); font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+  .pg-packages-index .pk-tbl tbody td:nth-child(4)::before { content: "Saat habis"; }
+  .pg-packages-index .pk-tbl tbody td:nth-child(5)::before { content: "Masa"; }
+  .pg-packages-index .pk-tbl tbody td:nth-child(6)::before { content: "Harga"; }
+  .pg-packages-index .pk-tbl tbody td:nth-child(9)::before { content: "Kartu"; }
+  .pg-packages-index .pk-radius-tag, .pg-packages-index .pk-mode { white-space: normal; }
+  .pg-packages-index .pk-lepas-tbl thead { display: none; }
+  .pg-packages-index .pk-lepas-tbl, .pg-packages-index .pk-lepas-tbl tbody { display: block; }
+  .pg-packages-index .pk-lepas-tbl tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px;
+    grid-template-areas: "paket aksi" "profil profil" "user web" "status status";
+    padding: 12px var(--pad-card); border-bottom: 1px solid var(--line);
+  }
+  .pg-packages-index .pk-lepas-tbl tbody tr:last-child { border-bottom: 0; }
+  .pg-packages-index .pk-lepas-tbl tbody td { display: block; min-width: 0; padding: 0; border: 0; text-align: left; }
+  .pg-packages-index .pl-paket { grid-area: paket; }
+  .pg-packages-index .pl-profil { grid-area: profil; }
+  .pg-packages-index .pl-user { grid-area: user; font-family: var(--font-sans); }
+  .pg-packages-index .pl-web { grid-area: web; text-align: right; }
+  .pg-packages-index .pl-status { grid-area: status; }
+  .pg-packages-index .pk-lepas-tbl .pk-aksi { grid-area: aksi; width: auto; }
+}
+@media (max-width: 880px) {
+  .pg-user-hotspot-create form[x-data="userForm()"] { grid-template-columns: 1fr !important; }
+  .pg-user-hotspot-create form[x-data="userForm()"] aside { position: static !important; }
+}
+.dr-inv { margin-top: 22px; }
+.dr-inv-opsi { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; border: 0; min-width: 0; }
+.dr-inv-opsi legend { margin-bottom: 6px; padding: 0; font-size: 12.5px; color: var(--ink-2); }
+.dr-inv-radio { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-md); font-size: 13px; cursor: pointer; }
+.dr-inv-opsi .dr-inv-radio { font-size: 13px; font-weight: 400; color: var(--ink); }
+.dr-inv-radio:has(input:checked) { border-color: var(--brand); background: var(--brand-tint); }
+.dr-inv-note { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.dr-inv-note:empty { display: none; }
