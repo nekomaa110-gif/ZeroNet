@@ -8,13 +8,13 @@ use Illuminate\Support\Facades\Auth;
 class ActivityLogService
 {
     public static function log(
-        string $action,
-        string $description,
-        string $subjectType = null,
-        string $subjectId = null,
-        array  $properties = [],
-        string $ipAddress = null,
-        ?int   $userId = null,
+        string  $action,
+        string  $description,
+        ?string $subjectType = null,
+        ?string $subjectId = null,
+        array   $properties = [],
+        ?string $ipAddress = null,
+        ?int    $userId = null,
     ): void {
         if ($userId === null) {
             $candidate = Auth::id();
