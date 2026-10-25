@@ -44,7 +44,7 @@
               <td class="vl-pilih">
                 <input type="checkbox" data-pilih value="{{ $b->id }}" data-kode="{{ $b->code }}" data-router="{{ $b->router_label }}"
                        data-kartu="{{ (int) $b->quantity }}" data-siap="{{ (int) ($pakai->siap ?? 0) }}" data-aktif="{{ (int) ($pakai->aktif ?? 0) }}"
-                       data-hapus="{{ route('vouchers.destroy', $b) }}" aria-label="Pilih batch {{ $b->code }}"
+                       data-hapus="{{ route('vouchers.destroy', $b) }}" data-pratinjau="{{ route('vouchers.preview-destroy', $b) }}" aria-label="Pilih batch {{ $b->code }}"
                        @if ($b->sedangSinkron()) disabled title="Batch sedang sinkron ke router" @endif>
               </td>
             @endif

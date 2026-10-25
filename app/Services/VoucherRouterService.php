@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Router;
+use App\Models\Voucher;
 use Exception;
+use RuntimeException;
 
 class VoucherRouterService
 {
@@ -138,7 +140,7 @@ class VoucherRouterService
         $out = [];
         foreach ($rows as $r) {
             if (($r['name'] ?? '') !== '') {
-                $out[mb_strtolower($r['name'])] = [
+                $out[(string) $r['name']][] = [
                     'comment'  => (string) ($r['comment'] ?? ''),
                     'password' => array_key_exists('password', $r) ? (string) $r['password'] : null,
                 ];
@@ -178,17 +180,50 @@ class VoucherRouterService
     public function userStates(Router $router): array
     {
         $rows = $this->client($router)->query('/ip/hotspot/user/print', [
-            '=.proplist' => 'name,profile,comment,uptime,limit-uptime,bytes-in,bytes-out,disabled',
+            '=.proplist' => 'name,password,profile,comment,uptime,limit-uptime,bytes-in,bytes-out,disabled',
         ]);
 
         $out = [];
         foreach ($rows as $r) {
             if (($r['name'] ?? '') !== '') {
-                $out[mb_strtolower($r['name'])] = $r;
+                $out[(string) $r['name']][] = $r;
             }
         }
 
         return $out;
+    }
+
+    public function bacaCek(Router $router): array
+    {
+        $c = $this->client($router);
+
+        $users = [];
+        foreach ($c->query('/ip/hotspot/user/print', ['=.proplist' => 'name,password,profile,uptime,limit-uptime,comment,disabled']) as $r) {
+            if (($r['name'] ?? '') !== '') {
+                $users[(string) $r['name']][] = $r;
+            }
+        }
+
+        $online = [];
+        foreach ($c->query('/ip/hotspot/active/print', ['=.proplist' => 'user']) as $a) {
+            if (($a['user'] ?? '') !== '') {
+                $online[(string) $a['user']] = true;
+            }
+        }
+
+        $zona = self::zonaDariJam($c->query('/system/clock/print')[0] ?? []);
+
+        $adaPassword = $users === [];
+        foreach ($users as $daftar) {
+            foreach ($daftar as $r) {
+                if (array_key_exists('password', $r)) {
+                    $adaPassword = true;
+                    break 2;
+                }
+            }
+        }
+
+        return ['users' => $users, 'online' => $online, 'zona' => $zona, 'ada_password' => $adaPassword];
     }
 
     public function addUsers(Router $router, array $rows, ?callable $progress = null): array
@@ -237,40 +272,73 @@ class VoucherRouterService
         return $hasil;
     }
 
-    public function removeUsers(Router $router, array $names): array
+    public function removeUsers(Router $router, iterable $kartu): array
     {
-        return $this->gateway->kunciTulis($router->slug, fn () => $this->removeUsersTerkunci($router, $names), self::TUNGGU_KUNCI, self::TTL_KUNCI);
+        $daftar = [];
+        $sudah  = [];
+        foreach ($kartu as $k) {
+            $nama  = (string) ($k instanceof Voucher ? $k->username : ($k['username'] ?? ''));
+            $sandi = (string) ($k instanceof Voucher ? $k->password : ($k['password'] ?? ''));
+            if ($nama === '' || isset($sudah[$nama])) {
+                continue;
+            }
+            $sudah[$nama] = true;
+            $daftar[]     = [$nama, $sandi];
+        }
+
+        if (! $daftar) {
+            return ['removed' => 0, 'missing' => 0, 'beda_password' => 0, 'gagal' => 0, 'hasil' => []];
+        }
+
+        return $this->gateway->kunciTulis($router->slug, fn () => $this->removeUsersTerkunci($router, $daftar), self::TUNGGU_KUNCI, self::TTL_KUNCI);
     }
 
-    private function removeUsersTerkunci(Router $router, array $names): array
+    private function removeUsersTerkunci(Router $router, array $daftar): array
     {
-        if (! $names) {
-            return ['removed' => 0, 'missing' => 0];
-        }
-
         $client = $this->client($router);
-        $wanted = array_flip(array_map('mb_strtolower', $names));
+        $baris  = $client->query('/ip/hotspot/user/print', ['=.proplist' => '.id,name,password']);
 
-        $ids = [];
-        foreach ($client->query('/ip/hotspot/user/print', ['=.proplist' => '.id,name']) as $row) {
-            if (isset($wanted[mb_strtolower($row['name'] ?? '')])) {
-                $ids[] = $row['.id'];
+        if ($baris !== [] && ! array_filter($baris, fn ($r) => array_key_exists('password', $r))) {
+            throw new RuntimeException('Router tidak memberi password user hotspot, hapus dibatalkan.');
+        }
+
+        $perNama = [];
+        foreach ($baris as $r) {
+            $perNama[(string) ($r['name'] ?? '')][] = ['id' => (string) $r['.id'], 'password' => (string) ($r['password'] ?? '')];
+        }
+
+        $status   = [];
+        $perintah = [];
+        $pemilik  = [];
+        foreach ($daftar as [$nama, $sandi]) {
+            $calon = $perNama[$nama] ?? [];
+            $cocok = array_filter($calon, fn ($c) => $c['password'] === $sandi);
+            $status[$nama] = $calon === [] ? 'tidak_ada' : ($cocok === [] ? 'beda_password' : 'tidak_ada');
+
+            foreach ($cocok as $c) {
+                $perintah[] = ['cmd' => '/ip/hotspot/user/remove', 'params' => ['=.id' => $c['id']]];
+                $pemilik[]  = $nama;
             }
         }
 
-        $commands = array_map(
-            fn (string $id) => ['cmd' => '/ip/hotspot/user/remove', 'params' => ['=.id' => $id]],
-            $ids,
-        );
-
-        $removed = 0;
-        foreach ($client->queryMany($commands, (int) config('voucher.sync_chunk', 25)) as $r) {
-            if ($r['ok']) {
-                $removed++;
-            }
+        $jejak = [];
+        foreach ($client->queryMany($perintah, (int) config('voucher.sync_chunk', 25)) as $i => $r) {
+            $jejak[$pemilik[$i]][] = $r['ok'] ? 'ok' : (str_contains(mb_strtolower((string) $r['error']), 'no such item') ? 'hilang' : 'gagal');
         }
 
-        return ['removed' => $removed, 'missing' => count($names) - count($ids)];
+        foreach ($jejak as $nama => $akhir) {
+            $status[$nama] = in_array('gagal', $akhir, true) ? 'gagal' : (in_array('ok', $akhir, true) ? 'dicabut' : 'tidak_ada');
+        }
+
+        $hitung = array_count_values($status);
+
+        return [
+            'removed'       => $hitung['dicabut'] ?? 0,
+            'missing'       => $hitung['tidak_ada'] ?? 0,
+            'beda_password' => $hitung['beda_password'] ?? 0,
+            'gagal'         => $hitung['gagal'] ?? 0,
+            'hasil'         => $status,
+        ];
     }
 
     public function scriptStatus(Router $router): array

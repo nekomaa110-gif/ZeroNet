@@ -152,4 +152,46 @@ class StatusVoucherTest extends TestCase
             ->assertSeeInOrder(['<th class="ta-r">Belum dipakai</th>', '<th class="ta-r">Habis</th>'], false)
             ->assertDontSee('<th class="ta-r">Aktif</th>', false);
     }
+
+    public function test_sinkron_tidak_menandai_hilang_kartu_yang_baru_terkirim_setelah_daftar_router_dibaca(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-06 19:00:40'));
+        $this->siapkan([
+            ['name' => 'lama1', 'password' => 'lama1', 'profile' => '5-JAM', 'comment' => 'up-001-uji', 'uptime' => '0s', 'limit-uptime' => '5h'],
+        ]);
+        $this->voucher('lama1', ['synced_at' => now()->subDay()]);
+        $this->voucher('lama2', ['synced_at' => now()->subDay()]);
+        $this->voucher('baru1', ['synced_at' => now()]);
+        $this->voucher('baru2', ['synced_at' => now()->addSeconds(38)]);
+
+        $angka = app(VoucherService::class)->reconcile($this->router->fresh());
+
+        $this->assertSame(
+            ['baru1' => 'ready', 'baru2' => 'ready', 'lama1' => 'ready', 'lama2' => 'missing'],
+            Voucher::orderBy('username')->pluck('status', 'username')->all(),
+        );
+        $this->assertSame(['baru1', 'baru2'], Voucher::whereNull('checked_at')->orderBy('username')->pluck('username')->all());
+        $this->assertSame(['diperiksa' => 2, 'aktif' => 0, 'habis' => 0, 'hilang' => 1], $angka);
+    }
+
+    public function test_kolom_router_di_detail_batch_menulis_hilang_untuk_kartu_yang_tidak_ditemukan_saat_sinkron(): void
+    {
+        $this->siapkan();
+        $this->voucher('kartuada');
+        $this->voucher('kartuhilang', ['status' => 'missing', 'synced_at' => now()->subHour(), 'checked_at' => now()->subMinutes(5)]);
+        $this->actingAs(User::create([
+            'name' => 'admin', 'username' => 'adminuji', 'email' => 'admin@example.test', 'password' => Hash::make('x'),
+            'role' => 'admin', 'is_active' => true, 'two_factor_secret' => 'JBSWY3DPEHPK3PXP', 'two_factor_confirmed_at' => now(),
+        ]));
+
+        $isi   = $this->get(route('vouchers.show', $this->batch))->assertOk()->getContent();
+        $kolom = function (string $kode) use ($isi): string {
+            preg_match('#>' . $kode . '</td>.*?<td class="vl-router">(.*?)</td>#s', $isi, $m);
+
+            return trim(preg_replace('#\s+#', ' ', strip_tags($m[1] ?? '')));
+        };
+
+        $this->assertSame('hilang', $kolom('kartuhilang'));
+        $this->assertSame('ada', $kolom('kartuada'));
+    }
 }

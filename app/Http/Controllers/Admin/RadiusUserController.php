@@ -3,19 +3,28 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Exceptions\InvoiceTerbuka;
+use App\Exceptions\KirimUlangDitolak;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\RadiusUserRequest;
+use App\Models\CustomerContact;
 use App\Models\Invoice;
 use App\Models\RadCheck;
+use App\Models\WaVoucherDelivery;
+use App\Jobs\SendVoucherWhatsApp;
 use App\Services\ActivityLogService;
 use App\Services\BillingNotificationService;
+use App\Services\CustomerContactService;
+use App\Services\CustomerPriceService;
 use App\Services\InvoiceService;
 use App\Services\RadiusUserService;
+use App\Services\VoucherWaService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -23,9 +32,14 @@ use Illuminate\View\View;
 
 class RadiusUserController extends Controller
 {
+    public const KEMBALI_KUNCI = ['search', 'group', 'status', 'sort', 'harga', 'page'];
+
     public function __construct(
         private RadiusUserService $service,
         private InvoiceService $invoices,
+        private CustomerContactService $kontak,
+        private VoucherWaService $voucherWa,
+        private CustomerPriceService $prices,
     ) {}
 
     public function index(Request $request): View
@@ -34,52 +48,105 @@ class RadiusUserController extends Controller
         $group  = $request->string('group')->trim()->toString();
         $status = $request->string('status')->trim()->toString();
         $sort   = $request->string('sort')->trim()->toString() === 'down' ? 'down' : 'up';
-        $users  = $this->service->paginate($search, 15, $group, $status, $sort);
+        $harga  = $request->string('harga')->trim()->toString() === 'kosong' ? 'kosong' : '';
+        $users  = $this->service->paginate($search, 15, $group, $status, $sort, $harga);
 
         if ($request->ajax()) {
-            return view('user-hotspot._results', compact('users', 'search', 'group', 'status', 'sort'));
+            return view('user-hotspot._results', compact('users', 'search', 'group', 'status', 'sort', 'harga'));
         }
 
-        $groups = $this->service->availableGroups();
-        $stats  = $this->service->stats();
+        $groups     = $this->service->availableGroups();
+        $stats      = $this->service->stats();
+        $tanpaHarga = $this->service->jumlahTanpaHarga();
 
-        return view('user-hotspot.index', compact('users', 'search', 'group', 'status', 'sort', 'groups', 'stats'));
+        return view('user-hotspot.index', compact('users', 'search', 'group', 'status', 'sort', 'harga', 'groups', 'stats', 'tanpaHarga'));
     }
 
     public function create(): View
     {
-        $groups = $this->service->availableGroups();
-        return view('user-hotspot.create', compact('groups'));
+        $groups     = $this->service->availableGroups();
+        $hargaPaket = $this->prices->petaHargaPaket($groups);
+
+        return view('user-hotspot.create', compact('groups', 'hargaPaket'));
     }
 
     public function store(RadiusUserRequest $request): RedirectResponse
     {
-        $data = $request->validated();
-        $this->service->create($data);
+        $data     = $request->validated();
+        $username = $data['username'];
+        $mode     = ($data['kirim_voucher'] ?? null) === 'otomatis' ? 'otomatis' : 'manual';
+        $phone    = CustomerContactService::normalisasi($data['phone'] ?? null);
+        $kunci    = Cache::lock('user-hotspot:' . mb_strtolower($username), 10);
+        $minta    = $this->hargaDariRequest($request, $username);
+        $harga    = $minta['pakai'] || $this->prices->isGratis($username)
+            ? $minta['harga']
+            : $this->prices->hargaPaket($data['group'] ?? null);
+
+        if (! $kunci->get()) {
+            return back()->withInput($request->except('password'))->withErrors(['username' => 'Username sedang diproses, coba lagi sebentar.']);
+        }
+
+        try {
+            if (RadCheck::where('username', $username)->exists()) {
+                return back()->withInput($request->except('password'))->withErrors(['username' => 'Username sudah digunakan.']);
+            }
+
+            [$nomor, $kiriman, $hasilHarga] = DB::transaction(function () use ($data, $username, $mode, $phone, $request, $harga) {
+                $this->service->create($data);
+                $hasilHarga = $this->prices->simpan($username, $harga, $request->user()?->id);
+                $nomor   = $phone ? $this->kontak->ubahNomor($username, $phone) : null;
+                $kiriman = $mode === 'otomatis' ? $this->voucherWa->buatKiriman($username, $request->user()?->id) : null;
+
+                if ($kiriman?->status === WaVoucherDelivery::ANTRE) {
+                    SendVoucherWhatsApp::dispatch($kiriman->id)->afterCommit();
+                }
+
+                return [$nomor, $kiriman, $hasilHarga];
+            }, 3);
+        } finally {
+            $kunci->release();
+        }
+
+        $this->prices->catatPerubahan($username, $hasilHarga);
+
+        if ($nomor) {
+            $this->kontak->catatPerubahan($username, $nomor, 'tambah_user');
+        }
 
         ActivityLogService::log(
             'create',
-            "membuat user hotspot: {$data['username']}",
+            "membuat user hotspot: {$username}",
             'radius_user',
-            $data['username'],
-            ['group' => $data['group'] ?? null]
+            $username,
+            ['group' => $data['group'] ?? null, 'kirim_voucher' => $mode]
         );
 
-        return redirect()
-            ->route('user-hotspot.index')
-            ->with('success', "User {$data['username']} berhasil dibuat.");
+        $redirect = redirect()->route('user-hotspot.index');
+
+        if ($mode === 'manual') {
+            return $redirect->with('voucher_baru', $username);
+        }
+
+        return $redirect->with('success', "User {$username} berhasil dibuat." . ($kiriman->status === WaVoucherDelivery::ANTRE
+            ? " Voucher sedang dikirim ke {$kiriman->phone}; statusnya ada di detail user."
+            : " Voucher tidak dikirim: {$kiriman->reason}."));
     }
 
-    public function edit(string $username): View
+    public function edit(Request $request, string $username): View
     {
         $user   = $this->service->find($username);
+        $gratis = $this->prices->isGratis($username);
+        $harga  = $gratis ? null : $this->prices->harga($username);
+        $saran  = $gratis || $harga !== null ? null : $this->prices->saran($username);
+        $kembali = self::kembaliDari($request->query());
         $groups = $this->service->availableGroups();
         $openInvoices = Invoice::where('username', $username)
             ->whereIn('status', [Invoice::STATUS_DRAFT, Invoice::STATUS_UNPAID, Invoice::STATUS_PENDING])
             ->orderByDesc('id')
             ->get(['id', 'amount', 'status']);
+        $phone = CustomerContact::where('username', $username)->value('phone');
 
-        return view('user-hotspot.edit', compact('user', 'groups', 'openInvoices'));
+        return view('user-hotspot.edit', compact('user', 'groups', 'openInvoices', 'phone', 'gratis', 'harga', 'saran', 'kembali'));
     }
 
     public function voucher(string $username): View
@@ -96,14 +163,50 @@ class RadiusUserController extends Controller
         return view('user-hotspot.voucher', compact('user'));
     }
 
+    public function kirimUlang(Request $request, string $username): RedirectResponse
+    {
+        abort_unless(
+            RadCheck::where('username', $username)->where('attribute', 'Cleartext-Password')->exists(),
+            404
+        );
+
+        try {
+            $kiriman = DB::transaction(function () use ($username, $request) {
+                $kiriman = $this->voucherWa->kirimUlang($username, $request->user()?->id);
+
+                if ($kiriman->status === WaVoucherDelivery::ANTRE) {
+                    SendVoucherWhatsApp::dispatch($kiriman->id)->afterCommit();
+                }
+
+                return $kiriman;
+            });
+        } catch (KirimUlangDitolak $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        ActivityLogService::log(
+            'voucher_wa_kirim',
+            "Kirim ulang voucher WA: {$username}",
+            'radius_user',
+            $username,
+            ['status' => $kiriman->status, 'reason' => $kiriman->reason, 'phone' => $kiriman->phone]
+        );
+
+        return $kiriman->status === WaVoucherDelivery::ANTRE
+            ? back()->with('success', "Voucher {$username} dikirim ulang ke {$kiriman->phone}.")
+            : back()->with('error', "Voucher tidak dikirim: {$kiriman->reason}.");
+    }
+
     public function update(RadiusUserRequest $request, string $username): RedirectResponse
     {
         $data  = $request->validated();
         $aksi  = $data['invoice_aksi'] ?? null;
         $admin = $request->user();
+        $minta = $this->hargaDariRequest($request, $username);
+        $terlewat = $minta['pakai'] && $minta['harga'] !== null ? $this->prices->siklusTerlewat($username) : null;
 
         try {
-            [$invoice, $sampai] = DB::transaction(function () use ($username, $data, $aksi, $admin) {
+            [$invoice, $sampai, $nomor, $hasilHarga] = DB::transaction(function () use ($username, $data, $aksi, $admin, $minta) {
                 $lama = RadCheck::where('username', $username)
                     ->where('attribute', 'Expiration')
                     ->lockForUpdate()
@@ -124,12 +227,17 @@ class RadiusUserController extends Controller
 
                 $this->service->update($username, $data);
 
+                $hasilHarga = $minta['pakai'] ? $this->prices->simpan($username, $minta['harga'], (int) $admin->id) : null;
+
+                $phone = CustomerContactService::normalisasi($data['phone'] ?? null);
+                $nomor = $phone ? $this->kontak->ubahNomor($username, $phone) : null;
+
                 if ($invoice) {
                     $invoice = $this->invoices->tutupLewatPerpanjang($invoice, $aksi, (int) $admin->id, $baru, 'Edit user');
                 }
 
-                return [$invoice, $baru];
-            });
+                return [$invoice, $baru, $nomor, $hasilHarga];
+            }, 3);
         } catch (InvoiceTerbuka $e) {
             return back()->withInput()->withErrors(['invoice_aksi' => $e->getMessage()]);
         }
@@ -150,13 +258,41 @@ class RadiusUserController extends Controller
             $this->catatInvoiceDitutup($invoice, $aksi, $username, $sampai, 'Edit user');
         }
 
+        if ($nomor) {
+            $this->kontak->catatPerubahan($username, $nomor, 'edit_user');
+        }
+
+        if ($hasilHarga) {
+            $this->prices->catatPerubahan($username, $hasilHarga);
+        }
+
         $invoiceNote = $invoice
             ? ($aksi === 'lunas' ? " Invoice #{$invoice->id} ditandai lunas." : " Invoice #{$invoice->id} dibatalkan.")
             : '';
+        $nomorNote = $nomor ? $this->kontak->pesanSukses($username, $nomor) : '';
+        $hargaNote = $hasilHarga ? $this->prices->pesanSukses($hasilHarga) : '';
 
-        return redirect()
-            ->route('user-hotspot.index')
-            ->with('success', "User {$username} berhasil diperbarui.{$invoiceNote}");
+        $kembali = self::kembaliDari((array) $request->input('kembali', []));
+
+        if (($kembali['harga'] ?? '') === 'kosong') {
+            unset($kembali['page']);
+        }
+
+        $redirect = redirect()
+            ->route('user-hotspot.index', $kembali)
+            ->with('success', "User {$username} berhasil diperbarui.{$invoiceNote}{$nomorNote}{$hargaNote}");
+
+        $diulangReminder = ($nomor['berubah'] ?? false)
+            && $terlewat !== null
+            && $sampai !== null
+            && $sampai->isSameDay($terlewat)
+            && $sampai->gt(now()->addHours((int) config('services.whatsapp.reminder_hours', 24)));
+
+        if ($terlewat && ($hasilHarga['berubah'] ?? false) && ! $diulangReminder) {
+            $redirect->with('harga_terlewat', ['username' => $username, 'expire' => $terlewat->format('d M Y')]);
+        }
+
+        return $redirect;
     }
 
     private function catatInvoiceDitutup(Invoice $invoice, string $aksi, string $username, ?Carbon $sampai, string $jalur): void
@@ -246,6 +382,29 @@ class RadiusUserController extends Controller
             : '';
 
         return back()->with('success', "User {$username} diperpanjang {$days} hari, aktif sampai {$until}.{$note}{$invoiceNote}{$waNote}");
+    }
+
+    public static function kembaliDari(array $query): array
+    {
+        return array_filter(
+            Arr::only($query, self::KEMBALI_KUNCI),
+            fn ($v) => is_string($v) && $v !== '' && mb_strlen($v) <= 100
+        );
+    }
+
+    private function hargaDariRequest(RadiusUserRequest $request, string $username): array
+    {
+        if ($this->prices->isGratis($username)) {
+            return ['pakai' => false, 'harga' => null];
+        }
+
+        if (! $request->user()?->isAdmin() || ! $request->exists('price')) {
+            return ['pakai' => false, 'harga' => null];
+        }
+
+        $harga = CustomerPriceService::normalisasi($request->input('price'));
+
+        return ['pakai' => true, 'harga' => $harga === false ? null : $harga];
     }
 
     private function invoiceUntukDitutup(Collection $terbuka, ?string $aksi, ?int $invoiceId, bool $admin): ?Invoice

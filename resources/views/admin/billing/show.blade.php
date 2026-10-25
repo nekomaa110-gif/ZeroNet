@@ -162,7 +162,8 @@
             @csrf
             <div class="field">
               <label for="pub-amount">Jumlah (Rp)</label>
-              <input id="pub-amount" name="amount" type="number" class="input mono" min="1000" step="1000" value="{{ old('amount', 200000) }}" required>
+              <input id="pub-amount" name="amount" type="number" class="input mono" min="1000" step="1" value="{{ old('amount', $hargaUser ?? 200000) }}" required>
+              <div class="action-hint">{{ $hargaUser ? 'Harga user: ' . \App\Services\CustomerPriceService::rupiah($hargaUser) : 'Belum ada harga' }}</div>
               <div class="action-chips" role="group" aria-label="Harga cepat">
                 <button type="button" class="chip" onclick="this.form.amount.value=200000">200.000</button>
                 <button type="button" class="chip" onclick="this.form.amount.value=175000">175.000</button>

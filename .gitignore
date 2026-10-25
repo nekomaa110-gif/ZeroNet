@@ -30,3 +30,5 @@ Thumbs.db
 *[Pp][Rr][Dd]*.docx
 /public/robots.txt
 /public/sitemap.xml
+/deploy/wa-gateway/.chrome-home/
+/deploy/wa-gateway/arsip-kiriman/

@@ -79,7 +79,7 @@ class VoucherPushService
 
     private function selesaiDiRouter(Voucher $voucher, array &$hitung): bool
     {
-        $diRouter = $this->diRouter[mb_strtolower($voucher->username)] ?? null;
+        $diRouter = $this->diRouter[$voucher->username] ?? [];
 
         if (! $diRouter) {
             return false;
@@ -110,7 +110,7 @@ class VoucherPushService
 
         $this->tandai(
             $voucher,
-            $this->milikVoucherIni($voucher, $this->diRouter[mb_strtolower($voucher->username)] ?? null),
+            $this->milikVoucherIni($voucher, $this->diRouter[$voucher->username] ?? []),
             self::pesanBentrok(),
             $hitung,
         );
@@ -127,15 +127,19 @@ class VoucherPushService
         $sukses ? $hitung['ok']++ : $hitung['failed']++;
     }
 
-    private function milikVoucherIni(Voucher $voucher, ?array $diRouter): bool
+    private function milikVoucherIni(Voucher $voucher, array $diRouter): bool
     {
-        if (! $diRouter) {
-            return false;
+        foreach ($diRouter as $baris) {
+            $cocok = $baris['password'] !== null
+                ? $baris['password'] === (string) $voucher->password
+                : $baris['comment'] === (string) $voucher->comment;
+
+            if ($cocok) {
+                return true;
+            }
         }
 
-        return $diRouter['password'] !== null
-            ? $diRouter['password'] === (string) $voucher->password
-            : $diRouter['comment'] === (string) $voucher->comment;
+        return false;
     }
 
     private function baris(Collection $potong): array

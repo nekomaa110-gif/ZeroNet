@@ -8,6 +8,7 @@ use App\Models\CustomerContact;
 use App\Models\RadCheck;
 use App\Models\WaBroadcast;
 use App\Services\ActivityLogService;
+use App\Services\CustomerContactService;
 use App\Services\WaSendTracker;
 use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
@@ -172,7 +173,7 @@ class WhatsAppController extends Controller
     {
         $data = $r->validate([
             'username' => ['required', 'string', 'max:64', 'unique:customer_contacts,username'],
-            'phone'    => ['required', 'string', 'regex:/^(62|\+62|0)[0-9]{9,13}$/'],
+            'phone'    => ['required', 'string', 'regex:' . CustomerContactService::NOMOR_REGEX],
             'name'     => ['nullable', 'string', 'max:100'],
             'notes'    => ['nullable', 'string', 'max:255'],
         ], [
@@ -195,7 +196,7 @@ class WhatsAppController extends Controller
     public function updateContact(Request $r, CustomerContact $contact)
     {
         $data = $r->validate([
-            'phone' => ['nullable', 'string', 'regex:/^(62|\+62|0)[0-9]{9,13}$/'],
+            'phone' => ['nullable', 'string', 'regex:' . CustomerContactService::NOMOR_REGEX],
             'name'  => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:255'],
         ], [

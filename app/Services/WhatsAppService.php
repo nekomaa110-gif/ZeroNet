@@ -62,6 +62,49 @@ class WhatsAppService
         }
     }
 
+    public function sendImageHtml(string $number, string $html, ?string $caption = null, array $viewport = []): array
+    {
+        $cfg = config('services.whatsapp');
+        try {
+            $res = Http::withHeaders(['x-api-key' => $cfg['key']])
+                ->timeout(60)
+                ->post(rtrim($cfg['url'], '/').'/send-image-html', array_filter([
+                    'number'   => $number,
+                    'html'     => $html,
+                    'caption'  => $caption,
+                    'viewport' => $viewport ?: null,
+                ]));
+            $body = $res->json();
+            $body = is_array($body) ? $body : null;
+            $ok   = $res->successful() && (($body['ok'] ?? false) === true);
+            Log::info('wa.send_image_html', [
+                'to' => $number, 'ok' => $ok, 'http' => $res->status(),
+                'png_bytes' => $body['png_bytes'] ?? null, 'code' => $body['code'] ?? null,
+            ]);
+            return ['ok' => $ok, 'http' => $res->status(), 'body' => $body, 'transport' => null];
+        } catch (\Throwable $e) {
+            $transport = self::jenisGalatTransport($e->getMessage());
+            Log::error('wa.send_image_html.exception', [
+                'to' => $number, 'transport' => $transport, 'err' => mb_substr($e->getMessage(), 0, 200),
+            ]);
+            return ['ok' => false, 'http' => null, 'body' => null, 'transport' => $transport];
+        }
+    }
+
+    public static function jenisGalatTransport(string $pesan): string
+    {
+        if (! preg_match('/cURL error (\d+)/', $pesan, $m)) {
+            return 'lain';
+        }
+
+        return match ((int) $m[1]) {
+            7       => 'refused',
+            28      => 'timeout',
+            52, 56  => 'putus',
+            default => 'lain',
+        };
+    }
+
     public function status(bool $withQr = false): array
     {
         $cfg = config('services.whatsapp');

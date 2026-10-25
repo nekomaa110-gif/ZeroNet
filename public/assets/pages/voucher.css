@@ -25,6 +25,22 @@
 .pg-voucher-check-index .vc-load i { font-style:normal; color:var(--ink-3); }
 .pg-voucher-check-index .vc-skel { margin-top:18px; display:grid; gap:10px; }
 .pg-voucher-check-index .vc-skel .row { display:grid; grid-template-columns:1fr 1fr; gap:10px 28px; }
+.pg-voucher-check-index .vc-isian { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px 14px; }
+.pg-voucher-check-index .vc-aksi { margin-top:12px; }
+.pg-voucher-check-index .vc-peringatan { margin:12px 0 0; padding:10px 12px 10px 28px; border-radius:8px; background:var(--warn-tint); color:var(--ink); font-size:13px; }
+.pg-voucher-check-index .vc-peringatan li + li { margin-top:4px; }
+.pg-voucher-check-index .vc-panel .kvp small { margin-left:6px; }
+.pg-voucher-check-index .vc-ujung { border:1px solid var(--line); border-radius:8px; padding:8px 12px 12px; margin:0 0 12px; min-width:0; }
+.pg-voucher-check-index .vc-ujung legend { padding:0 6px; font-size:12.5px; font-weight:600; color:var(--ink-2); }
+.pg-voucher-check-index .vc-tabel-rentang th, .pg-voucher-check-index .vc-tabel-rentang td { padding-left:10px; padding-right:10px; white-space:nowrap; }
+.pg-voucher-check-index .vc-tabel-rentang td.vc-bungkus { white-space:normal; }
+.pg-voucher-check-index .vc-tabel-rentang td.vc-ket { white-space:normal; min-width:180px; font-size:12.5px; color:var(--ink-2); }
+@media (max-width: 880px) {
+  .pg-voucher-check-index .vc-tabel-rentang td.vc-bungkus { white-space:nowrap; }
+  .pg-voucher-check-index .vc-tabel-rentang td.vc-ket { min-width:240px; }
+}
+.pg-voucher-check-index .vc-tabel-rentang td.vc-ket div + div { margin-top:2px; }
+.pg-voucher-check-index .vc-tabel-rentang .badge + .badge { margin-left:4px; }
 .verdict.verdict-ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
 .verdict.verdict-warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
 .verdict.verdict-err { border-color: color-mix(in srgb, var(--err) 45%, var(--line)); }
@@ -235,5 +251,10 @@
 }
 @media (max-width: 560px) {
   .pg-voucher-batch .vb-judul { font-size: 18px; }
+  .pg-voucher-batch .toolbar .tb-end { width: 100%; }
+  .pg-voucher-batch .toolbar .tb-end .btn { flex: 1; }
+  .pg-voucher-batch .vl-massal-teks { flex: 1 1 auto; }
+  .pg-voucher-batch .vl-massal .vl-massal-aksi { display: contents; }
+  .pg-voucher-batch .vl-massal [data-massal-hapus], .pg-voucher-batch .vl-massal [data-massal-habis] { flex: 1 1 auto; }
   .pg-voucher-batch .vb-bahaya-baris { flex-direction: column; align-items: stretch; gap: 10px; }
 }

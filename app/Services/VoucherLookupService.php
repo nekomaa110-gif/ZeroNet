@@ -74,7 +74,8 @@ class VoucherLookupService
                 continue;
             }
 
-            $user    = $this->cariUser($data['users'], $kode);
+            $calon   = $this->cariUser($data['users'], $kode, $pass);
+            $user    = $calon[0] ?? null;
             $records = $this->cariRecord($data['scripts'], $kode);
 
             foreach ($records as $r) {
@@ -86,7 +87,7 @@ class VoucherLookupService
             }
 
             $hasil['ketemu'] = true;
-            $hasil['hasil'][] = $this->susunLaporan($router, $data, $kode, $pass, $user, $records);
+            $hasil['hasil'][] = $this->susunLaporan($router, $data, $kode, $pass, $user, $records, $calon);
         }
 
         if ($kode !== '' && ! $hasil['ketemu']) {
@@ -132,7 +133,7 @@ class VoucherLookupService
         }
     }
 
-    private function susunLaporan(Router $router, array $data, string $kode, string $pass, ?array $user, array $records): array
+    private function susunLaporan(Router $router, array $data, string $kode, string $pass, ?array $user, array $records, array $calon): array
     {
         $now    = $data['jam'];
         $record = $records[0] ?? null;
@@ -142,6 +143,7 @@ class VoucherLookupService
             'jam'     => $now,
             'jam_teks' => $now?->format('d M Y H:i:s') ?? '?',
             'user'    => null,
+            'kembar'  => [],
             'masa'    => null,
             'record'  => $record,
             'records' => $records,
@@ -153,7 +155,18 @@ class VoucherLookupService
         ];
 
         if ($user) {
-            $baris['user'] = $this->susunUser($data, $user, $pass);
+            $baris['user']   = $this->susunUser($data, $user, $pass) + ['huruf_beda' => ($user['name'] ?? '') !== $kode];
+            $baris['kembar'] = array_map(fn (array $u, int $i) => [
+                'nama'       => $u['name'] ?? '',
+                'password'   => $u['password'] ?? '',
+                'pass_cocok' => $pass !== '' ? $pass === ($u['password'] ?? '') : null,
+                'huruf_beda' => ($u['name'] ?? '') !== $kode,
+                'profile'    => $u['profile'] ?? '-',
+                'uptime'     => $u['uptime'] ?? '0s',
+                'limit'      => $u['limit-uptime'] ?? '-',
+                'comment'    => trim($u['comment'] ?? ''),
+                'dipilih'    => $i === 0,
+            ], $calon, array_keys($calon));
             $baris['masa'] = $this->susunMasa($user, $now, (bool) $records);
             $baris['vonis'] = $this->vonis($baris['user'], $baris['masa'], $now);
         } else {
@@ -414,15 +427,20 @@ class VoucherLookupService
         return array_slice($mirip, 0, self::MIRIP_MAKS);
     }
 
-    private function cariUser(array $users, string $kode): ?array
+    private function cariUser(array $users, string $kode, string $pass): array
     {
-        foreach ($users as $u) {
-            if (strcasecmp($u['name'] ?? '', $kode) === 0) {
-                return $u;
+        $calon = [];
+
+        foreach (array_values($users) as $i => $u) {
+            $nama = $u['name'] ?? '';
+            if (strcasecmp($nama, $kode) === 0) {
+                $calon[] = ['baris' => $u, 'urut' => [$pass !== '' && ($u['password'] ?? '') === $pass ? 0 : 1, $nama === $kode ? 0 : 1, $i]];
             }
         }
 
-        return null;
+        usort($calon, fn ($a, $b) => $a['urut'] <=> $b['urut']);
+
+        return array_column($calon, 'baris');
     }
 
     private function cariRecord(array $scripts, string $kode): array

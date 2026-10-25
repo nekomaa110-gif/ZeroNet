@@ -57,6 +57,9 @@ Route::middleware(['auth', 'ensure.admin'])->group(function () {
     Route::get('user-hotspot/{radius_user}/voucher', [RadiusUserController::class, 'voucher'])
         ->name('user-hotspot.voucher');
 
+    Route::post('user-hotspot/{radius_user}/kirim-voucher', [RadiusUserController::class, 'kirimUlang'])
+        ->name('user-hotspot.kirim-voucher');
+
     Route::delete('user-hotspot/{radius_user}', [RadiusUserController::class, 'destroy'])
         ->name('user-hotspot.destroy')
         ->middleware('role:admin');
@@ -77,7 +80,8 @@ Route::middleware(['auth', 'ensure.admin'])->group(function () {
     });
 
     Route::get('/cek-voucher', [VoucherCheckController::class, 'index'])->name('voucher-check.index');
-    Route::get('/cek-voucher/cari', [VoucherCheckController::class, 'cari'])->name('voucher-check.cari');
+    Route::post('/cek-voucher/cari', [VoucherCheckController::class, 'cari'])->middleware('throttle:cek-voucher')->name('voucher-check.cari');
+    Route::post('/cek-voucher/rentang', [VoucherCheckController::class, 'rentang'])->middleware('throttle:cek-voucher')->name('voucher-check.rentang');
 
     Route::get('/voucher', [VoucherController::class, 'index'])->name('vouchers.index');
     Route::get('/voucher/batch/{batch}', [VoucherController::class, 'show'])->name('vouchers.show');
@@ -98,6 +102,8 @@ Route::middleware(['auth', 'ensure.admin'])->group(function () {
         Route::delete('/voucher/batch/{batch}', [VoucherController::class, 'destroy'])->name('vouchers.destroy');
         Route::delete('/voucher/kartu/{voucher}', [VoucherController::class, 'destroyVoucher'])->name('vouchers.destroy-one');
         Route::delete('/voucher/batch/{batch}/kartu', [VoucherController::class, 'destroyMany'])->name('vouchers.destroy-many');
+        Route::post('/voucher/batch/{batch}/kartu/pratinjau-hapus', [VoucherController::class, 'pratinjauHapusKartu'])->middleware('throttle:hapus-voucher')->name('vouchers.preview-destroy-many');
+        Route::post('/voucher/batch/{batch}/pratinjau-hapus', [VoucherController::class, 'pratinjauHapusBatch'])->middleware('throttle:hapus-voucher')->name('vouchers.preview-destroy');
 
         Route::get('/voucher/template', [TemplateCetakController::class, 'index'])->name('voucher-templates.index');
         Route::post('/voucher/template', [TemplateCetakController::class, 'store'])->name('voucher-templates.store');

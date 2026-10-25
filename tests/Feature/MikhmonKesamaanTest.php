@@ -17,7 +17,7 @@ class MikhmonKesamaanTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const LOCK_MIKHMON = '; [:local mac $"mac-address"; /ip hotspot user set mac-address=$mac [find where name=$user]]';
+    private const LOCK_MIKHMON = '; [:local mac $"mac-address"; :local u [/ip hotspot user find where name=$user]; :if ([:len $u] = 1) do={ /ip hotspot user set $u mac-address=$mac }]';
 
     private ?RouterPalsu $palsu = null;
 

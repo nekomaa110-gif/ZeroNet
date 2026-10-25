@@ -5,7 +5,10 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const pino = require('pino');
 const QRCode = require('qrcode');
-const puppeteer = require('puppeteer');
+const { renderUrlToPng, renderHtmlToPng } = require('./render');
+const { buatHandlerKirimHtml } = require('./kirim-html');
+const { buatArsipKiriman } = require('./arsip-kiriman');
+const { buatPemilihTujuan } = require('./alamat-tujuan');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -21,6 +24,9 @@ const SESSION_DIR = path.resolve(process.env.SESSION_DIR || './auth');
 const LOG_DIR = path.resolve(process.env.LOG_DIR || './logs');
 const MIN_DELAY = parseInt(process.env.MIN_DELAY_MS || '1500', 10);
 const MAX_DELAY = parseInt(process.env.MAX_DELAY_MS || '4000', 10);
+const ARSIP_DIR = path.resolve(process.env.ARSIP_KIRIMAN_DIR || './arsip-kiriman');
+const ARSIP_HARI = parseInt(process.env.ARSIP_KIRIMAN_HARI || '7', 10);
+const KIRIM_LID = process.env.KIRIM_LID || '';
 
 const VERSION_FETCH_TIMEOUT = 8000;
 const STUCK_MS = 90 * 1000;
@@ -69,19 +75,9 @@ let cachedVersion = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const jitter = () => MIN_DELAY + Math.floor(Math.random() * (MAX_DELAY - MIN_DELAY));
 
-const SENT_CACHE_MAX = 400;
-const SENT_CACHE_TTL = 60 * 60 * 1000;
-const sentCache = new Map();
-
-function rememberSent(id, message) {
-  if (!id || !message) return;
-  sentCache.set(id, { message, at: Date.now() });
-  const cutoff = Date.now() - SENT_CACHE_TTL;
-  for (const [k, v] of sentCache) {
-    if (v.at >= cutoff && sentCache.size <= SENT_CACHE_MAX) break;
-    sentCache.delete(k);
-  }
-}
+const arsipKiriman = buatArsipKiriman({ dir: ARSIP_DIR, ttlMs: ARSIP_HARI * 24 * 60 * 60 * 1000, maks: 5000, logger });
+const rememberSent = (id, message) => arsipKiriman.simpan(id, message);
+const pilihTujuan = buatPemilihTujuan(KIRIM_LID);
 
 function setStatus(s) {
   if (connectionStatus !== s) {
@@ -187,9 +183,9 @@ async function startSocket() {
       keepAliveIntervalMs: 25000,
       retryRequestDelayMs: 1000,
       getMessage: async (key) => {
-        const hit = sentCache.get(key.id);
+        const hit = arsipKiriman.ambil(key.id);
         logger.info({ id: key.id, chat: key.remoteJid, from: key.participant, hit: !!hit }, 'retry request');
-        return hit?.message;
+        return hit;
       },
       logger: pino({ level: 'silent' }),
     });
@@ -362,68 +358,6 @@ async function doLogout(reason) {
   scheduleReconnect(500, reason);
 }
 
-const CHROME_HOME = path.resolve(__dirname, '.chrome-home');
-fs.mkdirSync(path.join(CHROME_HOME, 'profile'), { recursive: true });
-
-let browserInstance = null;
-async function getBrowser() {
-  if (browserInstance && browserInstance.isConnected && browserInstance.isConnected()) {
-    return browserInstance;
-  }
-  try { if (browserInstance) await browserInstance.close(); } catch {}
-  browserInstance = await puppeteer.launch({
-    headless: 'new',
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-      '--disable-gpu', '--no-zygote', '--hide-scrollbars',
-      '--disable-crashpad', '--disable-breakpad', '--disable-crash-reporter',
-    ],
-    userDataDir: path.join(CHROME_HOME, 'profile'),
-    env: {
-      ...process.env,
-      HOME: CHROME_HOME,
-      XDG_CONFIG_HOME: path.join(CHROME_HOME, '.config'),
-      XDG_CACHE_HOME: path.join(CHROME_HOME, '.cache'),
-    },
-  });
-  browserInstance.on('disconnected', () => { browserInstance = null; });
-  return browserInstance;
-}
-
-async function renderOnce(url, viewport) {
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  try {
-    const width = viewport.width || 420;
-    const scale = viewport.scale || 2;
-    await page.setViewport({ width, height: viewport.height || 800, deviceScaleFactor: scale });
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
-    await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
-
-    const contentH = await page.evaluate(() => {
-      const b = document.body;
-      return Math.ceil(Math.max(b.scrollHeight, b.getBoundingClientRect().height, 1));
-    });
-    if (contentH > 0 && contentH !== viewport.height) {
-      await page.setViewport({ width, height: contentH, deviceScaleFactor: scale });
-    }
-    return await page.screenshot({ type: 'png', fullPage: true });
-  } finally {
-    try { await page.close(); } catch {}
-  }
-}
-
-async function renderUrlToPng(url, viewport = {}) {
-  try {
-    return await renderOnce(url, viewport);
-  } catch (e) {
-    logger.warn({ err: e.message, url }, 'render_retry');
-    try { await browserInstance?.close(); } catch {}
-    browserInstance = null;
-    return await renderOnce(url, viewport);
-  }
-}
-
 app.post('/send', apiAuth, sendLimiter, async (req, res) => {
   const { number, message } = req.body || {};
   if (!number || !message) return res.status(400).json({ ok: false, error: 'number & message required' });
@@ -431,9 +365,9 @@ app.post('/send', apiAuth, sendLimiter, async (req, res) => {
     return res.status(503).json({ ok: false, error: 'wa_not_ready', status: connectionStatus, needs_qr: connectionStatus === 'qr' });
   }
   try {
-    const jid = normalizeJid(number);
-    const [check] = await sock.onWhatsApp(jid);
+    const [check] = await sock.onWhatsApp(normalizeJid(number));
     if (!check?.exists) return res.status(404).json({ ok: false, error: 'number_not_on_whatsapp' });
+    const jid = pilihTujuan(normalizeJid(number), check);
     await sleep(jitter());
     const r = await sock.sendMessage(jid, { text: String(message) });
     rememberSent(r.key.id, r.message);
@@ -453,11 +387,11 @@ app.post('/send-image-url', apiAuth, sendLimiter, async (req, res) => {
     return res.status(503).json({ ok: false, error: 'wa_not_ready', status: connectionStatus, needs_qr: connectionStatus === 'qr' });
   }
   try {
-    const jid = normalizeJid(number);
-    const [check] = await sock.onWhatsApp(jid);
+    const [check] = await sock.onWhatsApp(normalizeJid(number));
     if (!check?.exists) return res.status(404).json({ ok: false, error: 'number_not_on_whatsapp' });
+    const jid = pilihTujuan(normalizeJid(number), check);
 
-    const png = await renderUrlToPng(url, viewport || {});
+    const png = await renderUrlToPng(url, viewport || {}, logger);
     await sleep(jitter());
     const r = await sock.sendMessage(jid, {
       image: png,
@@ -467,12 +401,23 @@ app.post('/send-image-url', apiAuth, sendLimiter, async (req, res) => {
     logger.info({ to: jid, id: r.key.id, url, png_bytes: png.length }, 'sent_image_url');
     res.json({ ok: true, id: r.key.id, png_bytes: png.length });
   } catch (e) {
-    logger.error({ err: e.message, url }, 'send_image_url_failed');
-    res.status(500).json({ ok: false, error: e.message });
+    logger.error({ err: e.message, url, code: e.code }, 'send_image_url_failed');
+    res.status(500).json({ ok: false, error: e.message, code: e.code });
   }
 });
 
-app.listen(PORT, HOST, () => logger.info(`listening on ${HOST}:${PORT}`));
+app.post('/send-image-html', apiAuth, sendLimiter, buatHandlerKirimHtml({
+  getSock: () => sock,
+  waitReady,
+  renderHtml: renderHtmlToPng,
+  normalizeJid,
+  rememberSent,
+  jeda: () => sleep(jitter()),
+  logger,
+  pilihTujuan,
+}));
+
+app.listen(PORT, HOST, () => logger.info({ kirim_lid: KIRIM_LID, arsip_hari: ARSIP_HARI }, `listening on ${HOST}:${PORT}`));
 startSocket().catch((e) => {
   logger.error({ err: e.message }, 'startSocket awal gagal');
   scheduleReconnect(3000, 'boot_failed');

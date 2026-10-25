@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Models\CustomerContact;
+use App\Models\CustomerPrice;
 use App\Models\CustomerRememberToken;
 use App\Models\Invoice;
 use App\Models\RadCheck;
 use App\Models\RadGroupCheck;
 use App\Models\RadReply;
 use App\Models\RadUserGroup;
+use App\Models\WaVoucherDelivery;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -24,11 +26,15 @@ class RadiusUserService
         Cache::forget(self::STATS_CACHE_KEY);
     }
 
-    public function paginate(string $search = '', int $perPage = 15, string $group = '', string $status = '', string $sort = 'up'): LengthAwarePaginator
+    public function paginate(string $search = '', int $perPage = 15, string $group = '', string $status = '', string $sort = 'up', string $harga = ''): LengthAwarePaginator
     {
         $query = RadCheck::query()
             ->select('radcheck.username')
             ->where('radcheck.attribute', 'Cleartext-Password');
+
+        if ($harga === 'kosong') {
+            $this->saringTanpaHarga($query);
+        }
 
         if ($group) {
             $query->join('radusergroup', 'radcheck.username', '=', 'radusergroup.username')
@@ -92,8 +98,13 @@ class RadiusUserService
             ->orderByDesc('id')
             ->get(['id', 'username', 'amount', 'status'])
             ->groupBy(fn (Invoice $i) => mb_strtolower($i->username));
+        $kirimanTerakhir = WaVoucherDelivery::whereIn('id', WaVoucherDelivery::selectRaw('MAX(id)')->whereIn('username', $usernames)->groupBy('username'))
+            ->get()
+            ->keyBy(fn (WaVoucherDelivery $d) => mb_strtolower($d->username));
+        $prices    = app(CustomerPriceService::class);
+        $hargaPeta = $prices->hargaBanyak($usernames);
 
-        $items = $usernames->map(function ($username) use ($groups, $radExpiries, $blocked, $openInvoices) {
+        $items = $usernames->map(function ($username) use ($groups, $radExpiries, $blocked, $openInvoices, $kirimanTerakhir, $prices, $hargaPeta) {
             $expiryAt = $radExpiries->has($username)
                 ? Carbon::parse($radExpiries[$username])
                 : null;
@@ -105,6 +116,9 @@ class RadiusUserService
                 'expiry_at'     => $expiryAt?->format('Y-m-d H:i:s'),
                 'active'        => ! $blocked->has($username),
                 'open_invoices' => $openInvoices->get(mb_strtolower($username), collect())->values(),
+                'kiriman'       => $kirimanTerakhir->get(mb_strtolower($username)),
+                'gratis'        => $prices->isGratis($username),
+                'harga'         => $hargaPeta[mb_strtolower($username)] ?? null,
             ];
         });
 
@@ -115,6 +129,27 @@ class RadiusUserService
             $page,
             ['path' => LengthAwarePaginator::resolveCurrentPath()]
         );
+    }
+
+    public function jumlahTanpaHarga(): int
+    {
+        $query = RadCheck::query()->where('radcheck.attribute', 'Cleartext-Password');
+        $this->saringTanpaHarga($query);
+
+        return $query->distinct()->count('radcheck.username');
+    }
+
+    private function saringTanpaHarga($query): void
+    {
+        $query->whereNotExists(function ($q) {
+            $q->from('customer_prices')->whereColumn('customer_prices.username', 'radcheck.username');
+        });
+
+        $gratis = app(CustomerPriceService::class)->daftarGratis();
+
+        if ($gratis !== []) {
+            $query->whereNotIn('radcheck.username', $gratis);
+        }
     }
 
     public function find(string $username): array
@@ -263,6 +298,8 @@ class RadiusUserService
             RadUserGroup::where('username', $username)->delete();
 
             CustomerContact::where('username', $username)->delete();
+            CustomerPrice::where('username', $username)->delete();
+            WaVoucherDelivery::where('username', $username)->delete();
             CustomerRememberToken::where('username', $username)->delete();
 
             $catatan = '[dibatalkan otomatis: user hotspot dihapus ' . now()->format('Y-m-d H:i') . ']';

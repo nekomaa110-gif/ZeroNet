@@ -177,39 +177,107 @@
     const keRouter = tombol.dataset.massalHapus === 'router';
     const n     = pilih.length;
     const kartu = angka(jumlah(pilih, 'kartu'));
-    const siap  = jumlah(pilih, 'siap');
-    const aktif = jumlah(pilih, 'aktif');
-
-    let pesan = keRouter
-      ? 'Hapus ' + angka(n) + ' batch DAN ' + kartu + ' kartunya dari router ' + sebut([...new Set(pilih.map(c => c.dataset.router))]) + '? Kartu yang sudah terjual akan langsung mati.'
-      : 'Hapus ' + angka(n) + ' batch beserta ' + kartu + ' kartunya dari panel? Kartu di router TIDAK ikut dihapus.';
-    if (keRouter && siap) pesan += '\n' + angka(siap) + ' kartu Belum dipakai ikut dicabut dan tidak bisa dijual lagi.';
-    if (keRouter && aktif) pesan += '\n' + angka(aktif) + ' kartu Aktif sedang dipakai pelanggan dan akan langsung terputus.';
-    pesan += '\n\n' + pilih.slice(0, 5).map(c => c.dataset.kode).join('\n') + (n > 5 ? '\n+' + angka(n - 5) + ' batch lainnya' : '');
-
-    const jawab = await window.zeroConfirm({
-      title: keRouter ? 'Hapus dari Router' : 'Hapus Batch',
-      message: pesan,
-      action: 'Hapus ' + angka(n) + ' batch',
-      variant: 'danger',
-      requirePassword: keRouter,
-      intent: 'Menghapus ' + n + ' batch' + (keRouter ? ' beserta kartunya dari router' : ' dari panel'),
-    });
-    if (keRouter ? !(jawab && jawab.ok) : !jawab) return;
-
-    berjalan = true;
     const teks    = daftar.querySelector('[data-massal-teks]');
     const dikunci = Array.from(daftar.querySelectorAll('[data-pilih]:not(:disabled), [data-pilih-semua], [data-massal] button'));
-    dikunci.forEach(el => { el.disabled = true; });
+    const kunci = () => { berjalan = true; dikunci.forEach(el => { el.disabled = true; }); };
+    const lepas = () => { berjalan = false; dikunci.forEach(el => { el.disabled = false; }); segarkan(); };
+    const galatPratinjau = [];
+    let sasaran = pilih;
+    let jawab;
+
+    if (keRouter) {
+      kunci();
+      const hasil = [];
+      for (let i = 0; i < pilih.length; i++) {
+        const c = pilih[i];
+        teks.textContent = 'Memeriksa ' + angka(i + 1) + ' dari ' + angka(pilih.length) + ' batch…';
+        try {
+          const res = await fetch(c.dataset.pratinjau, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 429) {
+            lepas();
+            window.vgToast(data.error || 'Terlalu banyak pratinjau, tunggu sebentar.', 'err');
+            return;
+          }
+          if (res.ok && data.success) hasil.push({ c, data });
+          else galatPratinjau.push({ c, alasan: data.error || data.message || ('HTTP ' + res.status) });
+        } catch (err) {
+          galatPratinjau.push({ c, alasan: 'Tidak bisa menghubungi server: ' + err.message });
+        }
+      }
+
+      if (!hasil.length) {
+        lepas();
+        window.vgToast(galatPratinjau.map(g => g.c.dataset.kode + ': ' + g.alasan).join(' '), 'err');
+        return;
+      }
+
+      const total = k => hasil.reduce((t, h) => t + Number((h.data.ringkasan || {})[k] || 0), 0);
+      const tahan = h => (h.data.ditahan || []).length + Number(h.data.ditahan_lain || 0);
+      const nTahan = hasil.reduce((t, h) => t + tahan(h), 0);
+      const nKandidat = hasil.reduce((t, h) => t + Number(h.data.kandidat || 0), 0);
+      const nPanel = Math.max(0, nKandidat - total('dicabut') - total('tidak_ada') - nTahan);
+
+      const detail = galatPratinjau.map(g => g.c.dataset.kode + ': ' + g.alasan);
+      let sisa = 0;
+      hasil.forEach(h => {
+        (h.data.ditahan || []).forEach(d => {
+          if (detail.length < 100) detail.push(h.c.dataset.kode + ' No ' + (d.nomor ?? '-') + ' ' + d.username + ': ' + d.alasan);
+          else sisa++;
+        });
+        sisa += Number(h.data.ditahan_lain || 0);
+      });
+      if (sisa > 0) detail.push('dan ' + sisa + ' kartu lain');
+
+      sasaran = hasil.map(h => h.c);
+      teks.textContent = angka(sasaran.length) + ' batch siap dihapus';
+      const pesanRouter = 'Hapus ' + angka(sasaran.length) + ' batch dari router ' + sebut([...new Set(sasaran.map(c => c.dataset.router))]) + '. '
+        + angka(total('dicabut')) + ' dicabut dari router, ' + angka(total('tidak_ada')) + ' sudah tidak ada di router, '
+        + angka(nPanel) + ' dihapus dari panel saja, ' + angka(nTahan) + ' ditahan.'
+        + '\n\n' + sasaran.slice(0, 5).map(c => c.dataset.kode).join('\n') + (sasaran.length > 5 ? '\n+' + angka(sasaran.length - 5) + ' batch lainnya' : '');
+
+      jawab = await window.zeroConfirm({
+        title: 'Hapus dari Router',
+        message: pesanRouter,
+        detail: detail,
+        action: 'Hapus ' + angka(sasaran.length) + ' batch',
+        variant: 'danger',
+        requirePassword: true,
+        intent: 'Menghapus ' + sasaran.length + ' batch beserta kartunya dari router',
+      });
+      if (!(jawab && jawab.ok)) { lepas(); return; }
+    } else {
+      const pesan = 'Hapus ' + angka(n) + ' batch beserta ' + kartu + ' kartunya dari panel? Kartu di router TIDAK ikut dihapus.'
+        + '\n\n' + pilih.slice(0, 5).map(c => c.dataset.kode).join('\n') + (n > 5 ? '\n+' + angka(n - 5) + ' batch lainnya' : '');
+      jawab = await window.zeroConfirm({
+        title: 'Hapus Batch',
+        message: pesan,
+        action: 'Hapus ' + angka(n) + ' batch',
+        variant: 'danger',
+        intent: 'Menghapus ' + n + ' batch dari panel',
+      });
+      if (!jawab) return;
+      kunci();
+    }
 
     const isi         = JSON.stringify(keRouter ? { remove_from_router: true, current_password: jawab.password } : {});
     const gagal       = new Map();
     const routerGagal = new Map();
-    let dihapus = 0, dicabut = 0, henti = '';
+    const sebagian    = [];
+    let dihapus = 0, dicabut = 0, ditahan = 0, henti = '';
 
-    for (let i = 0; i < n; i++) {
-      const c = pilih[i];
-      teks.textContent = 'Menghapus ' + angka(i + 1) + ' dari ' + angka(n) + ' batch…';
+    galatPratinjau.forEach(g => {
+      const alasan = 'pratinjau gagal, tidak dihapus: ' + g.alasan;
+      gagal.set(alasan, (gagal.get(alasan) || []).concat(g.c.dataset.kode));
+    });
+
+    for (let i = 0; i < sasaran.length; i++) {
+      const c = sasaran[i];
+      teks.textContent = 'Menghapus ' + angka(i + 1) + ' dari ' + angka(sasaran.length) + ' batch…';
       let alasan = henti || routerGagal.get(c.dataset.router) || '';
       if (!alasan) {
         try {
@@ -220,8 +288,14 @@
           });
           const data = await res.json().catch(() => ({}));
           if (res.ok && data.success) {
-            dihapus++;
             dicabut += Number(data.dicabut || 0);
+            const tahan = Number(data.ditahan || 0);
+            if (tahan > 0) {
+              ditahan += tahan;
+              sebagian.push(c.dataset.kode);
+            } else {
+              dihapus++;
+            }
             continue;
           }
           alasan = data.error || data.message || ('HTTP ' + res.status);
@@ -236,11 +310,15 @@
 
     const ringkas = [];
     if (dihapus) ringkas.push(angka(dihapus) + ' batch dihapus dari panel' + (keRouter ? ', ' + angka(dicabut) + ' kartu dicabut dari router.' : '.'));
+    if (sebagian.length) {
+      ringkas.push(angka(sebagian.length) + ' batch belum terhapus seluruhnya (' + sebagian.join(', ') + '): ' + angka(ditahan) + ' kartu ditahan'
+        + (keRouter && !dihapus ? ', ' + angka(dicabut) + ' kartu dicabut dari router' : '') + '.');
+    }
     gagal.forEach((kode, alasan) => ringkas.push(angka(kode.length) + ' batch gagal (' + kode.join(', ') + '): ' + alasan));
-    window.vgToast(ringkas.join(' '), gagal.size ? 'err' : 'ok');
+    window.vgToast(ringkas.join(' '), gagal.size ? 'err' : (sebagian.length ? 'warn' : 'ok'));
 
     berjalan = false;
-    if (dihapus) {
+    if (dihapus || sebagian.length) {
       daftar.dispatchEvent(new CustomEvent('live-search:muat-ulang', { bubbles: true }));
       return;
     }

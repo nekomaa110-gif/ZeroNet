@@ -28,7 +28,7 @@ class TemplateCetakService
         'hotspot'          => 'Nama hotspot untuk login, mis. hotspot.lan',
         'login_url'        => 'Alamat login lengkap dengan username dan password',
         'qr'               => 'Kode QR ke alamat login',
-        'nomor'            => 'Nomor urut kartu di lembar ini',
+        'nomor'            => 'Nomor kartu dalam batch',
         'brand'            => 'Nama brand',
     ];
 
@@ -42,10 +42,11 @@ class TemplateCetakService
         $pakaiQr      = str_contains($isi, '{{qr}}');
         $varian       = [];
         $kartu        = [];
-        $nomor        = 0;
+        $urut         = 0;
 
         foreach ($vouchers as $v) {
-            $nilai = $this->nilai($v, $batch, ++$nomor, $pakaiQr);
+            ++$urut;
+            $nilai = $this->nilai($v, $batch, $v->nomor ?? $urut, $pakaiQr);
             $mode  = $v->username === $v->password ? 'vc' : 'up';
             $aktif = [$mode => true] + array_map(fn ($x) => $x !== '', $nilai);
             $kunci = $mode . '|' . implode(',', array_keys(array_filter($aktif)));

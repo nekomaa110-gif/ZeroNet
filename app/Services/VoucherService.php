@@ -70,12 +70,14 @@ class VoucherService
                 'created_by'      => $userId,
             ]);
 
-            $now  = now();
+            $now   = now();
             $baris = [];
+            $nomor = 0;
 
             foreach ($pasangan as $p) {
                 $baris[] = [
                     'batch_id'     => $batch->id,
+                    'nomor'        => ++$nomor,
                     'router_id'    => $router->id,
                     'username'     => $p['username'],
                     'password'     => $p['password'],
@@ -152,6 +154,7 @@ class VoucherService
 
             Voucher::create([
                 'batch_id'     => $batch->id,
+                'nomor'        => 1,
                 'router_id'    => $router->id,
                 'username'     => $username,
                 'password'     => $password,
@@ -218,18 +221,38 @@ class VoucherService
 
     public function reconcile(Router $router, bool $dry = false): array
     {
+        $dibaca = now()->startOfSecond();
         $state  = $this->routers->userStates($router);
         $zona   = $this->routers->clockZone($router);
         $angka  = ['diperiksa' => 0, 'aktif' => 0, 'habis' => 0, 'hilang' => 0];
+
+        $adaPassword = $state === [];
+        foreach ($state as $daftar) {
+            foreach ($daftar as $r) {
+                if (array_key_exists('password', $r)) {
+                    $adaPassword = true;
+                    break 2;
+                }
+            }
+        }
 
         Voucher::query()
             ->where('router_id', $router->id)
             ->where('sync_status', 'success')
             ->with('batch:id,validity')
-            ->chunkById(500, function ($vouchers) use ($state, $zona, &$angka, $dry) {
+            ->chunkById(500, function ($vouchers) use ($state, $zona, $dibaca, &$angka, $dry, $adaPassword) {
                 foreach ($vouchers as $voucher) {
+                    $baris = $this->pilihBaris($state[$voucher->username] ?? [], (string) $voucher->password, $adaPassword);
+
+                    if ($baris === false) {
+                        continue;
+                    }
+
+                    if (! $baris && $voucher->synced_at?->gte($dibaca)) {
+                        continue;
+                    }
+
                     $angka['diperiksa']++;
-                    $baris = $state[mb_strtolower($voucher->username)] ?? null;
 
                     if (! $baris) {
                         $angka['hilang']++;
@@ -239,7 +262,7 @@ class VoucherService
                         continue;
                     }
 
-                    $ubah = $this->bacaKeadaan($voucher, $baris, $zona);
+                    $ubah = $this->keadaanDariRouter($voucher, $baris, $zona);
 
                     if ($ubah['status'] === 'active')                       $angka['aktif']++;
                     if (in_array($ubah['status'], ['expired', 'disabled'])) $angka['habis']++;
@@ -253,7 +276,26 @@ class VoucherService
         return $angka;
     }
 
-    private function bacaKeadaan(Voucher $voucher, array $baris, \DateTimeZone $zona): array
+    public function pilihBaris(array $calon, string $password, bool $adaPassword): array|false|null
+    {
+        if ($calon === []) {
+            return null;
+        }
+
+        if ($adaPassword) {
+            foreach ($calon as $r) {
+                if ((string) ($r['password'] ?? '') === $password) {
+                    return $r;
+                }
+            }
+
+            return null;
+        }
+
+        return count($calon) === 1 ? $calon[0] : false;
+    }
+
+    public function keadaanDariRouter(Voucher $voucher, array $baris, \DateTimeZone $zona): array
     {
         $uptime   = $this->lookup->keDetik($baris['uptime'] ?? '');
         $jatah    = $this->lookup->keDetik($baris['limit-uptime'] ?? '');

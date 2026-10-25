@@ -1,5 +1,7 @@
 
 @php
+    $bolehHapus = (bool) auth()->user()?->isAdmin();
+    $kembali = \App\Http\Controllers\Admin\RadiusUserController::kembaliDari(request()->query());
     $usernamesOnPage = collect($users->items())->pluck('username')->all();
     $latestSessions = collect();
     if (! empty($usernamesOnPage)) {
@@ -102,6 +104,12 @@
           $invLabel   = $invPertama
               ? '#' . $invPertama->id . ' · Rp ' . number_format($invPertama->amount, 0, ',', '.') . ' · ' . $invPertama->customerStatusBadge()[1]
               : '';
+          $kirim = app(\App\Services\VoucherWaService::class)->labelDrawer($user['kiriman'] ?? null);
+          $hargaLabel = ($user['gratis'] ?? false)
+              ? 'Gratis'
+              : (($user['harga'] ?? null) ? \App\Services\CustomerPriceService::rupiah($user['harga']) : 'Belum ada harga');
+          $hargaTone = ! ($user['gratis'] ?? false) && ! ($user['harga'] ?? null) ? 'warn' : '';
+          $editUrl = route('user-hotspot.edit', ['radius_user' => $user['username']] + $kembali);
         @endphp
         <tr class="user-row is-clickable" tabindex="0" aria-label="Detail {{ $user['username'] }}"
             data-username="{{ $user['username'] }}"
@@ -118,7 +126,14 @@
             data-online="{{ $sessOnline ? '1' : '0' }}"
             data-invoice-id="{{ $invPertama?->id }}"
             data-invoice-label="{{ $invLabel }}"
-            data-invoice-count="{{ $invTerbuka->count() }}">
+            data-invoice-count="{{ $invTerbuka->count() }}"
+            data-kirim-status="{{ $kirim['status'] }}"
+            data-kirim-label="{{ $kirim['label'] }}"
+            data-kirim-ulang="{{ $kirim['ulang'] ? '1' : '0' }}"
+            data-kirim-peringatan="{{ $kirim['peringatan'] ? '1' : '0' }}"
+            data-harga-label="{{ $hargaLabel }}"
+            data-harga-tone="{{ $hargaTone }}"
+            data-edit-url="{{ $editUrl }}">
           <td class="ix hide-sm">{{ $users->firstItem() + $loop->index }}</td>
 
           <td>
@@ -170,7 +185,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               </a>
 
-              <a href="{{ route('user-hotspot.edit', $user['username']) }}" class="icon-btn" title="Edit" aria-label="Edit {{ $user['username'] }}"
+              <a href="{{ $editUrl }}" class="icon-btn" title="Edit" aria-label="Edit {{ $user['username'] }}"
                  onclick="event.stopPropagation()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               </a>
@@ -186,6 +201,8 @@
                     @endif
                   </button>
                 </form>
+              @endif
+              @if ($bolehHapus)
                 <form method="POST" action="{{ route('user-hotspot.destroy', $user['username']) }}" class="inline-form"
                       onclick="event.stopPropagation()"
                       data-confirm="Hapus user {{ $user['username'] }}? Tindakan ini tidak bisa dibatalkan."
@@ -208,7 +225,9 @@
           <td colspan="6">
             <div class="empty">
               <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-              @if ($search || $group || $status)
+              @if (($harga ?? '') === 'kosong' && ! $search && ! $group && ! $status && $users->total() === 0)
+                <div class="empty-title">Semua user sudah punya harga.</div>
+              @elseif ($search || $group || $status || ($harga ?? '') !== '')
                 <div class="empty-title">Tidak ada user yang cocok</div>
                 <div>Coba ubah pencarian atau filter.</div>
               @else

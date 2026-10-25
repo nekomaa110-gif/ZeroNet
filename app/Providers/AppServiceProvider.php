@@ -9,8 +9,11 @@ use App\Services\RouterGateway;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -24,6 +27,14 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Auth::provider('radcheck', fn () => new RadcheckUserProvider());
+
+        RateLimiter::for('cek-voucher', fn (Request $r) => Limit::perMinute(30)
+            ->by('cek-voucher|' . ($r->user()?->id ?? $r->ip()))
+            ->response(fn () => response()->json(['pesan' => 'Terlalu banyak cek, tunggu sebentar.'], 429)));
+
+        RateLimiter::for('hapus-voucher', fn (Request $r) => Limit::perMinute(20)
+            ->by('hapus-voucher|' . ($r->user()?->id ?? $r->ip()))
+            ->response(fn () => response()->json(['success' => false, 'error' => 'Terlalu banyak pratinjau, tunggu sebentar.'], 429)));
 
         Event::listen(Login::class, function (Login $event) {
             if ($event->guard === 'web') {

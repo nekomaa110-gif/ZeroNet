@@ -69,6 +69,12 @@ return [
 
         'admin_notif_wa'    => (string) env('ADMIN_NOTIF_WA', env('BUSINESS_WA', '')),
 
+        'akun_gratis'       => collect(explode(',', (string) env('BILLING_AKUN_GRATIS', 'root')))
+            ->map(fn (string $u) => mb_strtolower(trim($u)))
+            ->filter()
+            ->values()
+            ->all(),
+
         'portal_url'        => 'https://' . (string) env('APP_DOMAIN', 'localhost'),
 
         'rekening'          => collect(explode(';', (string) env('BILLING_REKENING', '')))

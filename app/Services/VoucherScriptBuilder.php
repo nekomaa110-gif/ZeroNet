@@ -23,7 +23,15 @@ class VoucherScriptBuilder
 
         return <<<ROS
 :local uid [/ip hotspot user find where name="\$user"]
-:if ([:len \$uid] > 0) do={
+:if ([:len \$uid] > 1) do={
+  :global znKembar
+  :if ([:typeof \$znKembar] != "array") do={ :set znKembar [:toarray ""] }
+  :if ([:typeof (\$znKembar->\$user)] = "nothing") do={
+    :set (\$znKembar->\$user) 1
+    :log warning "zeronet: nama kembar \$user, masa aktif tidak dicap"
+  }
+}
+:if ([:len \$uid] = 1) do={
   :local cmt [/ip hotspot user get \$uid comment]
   :local pre [:pic \$cmt 0 2]
   :if (\$pre = "vc" or \$pre = "up" or \$cmt = "") do={
@@ -110,7 +118,7 @@ ROS;
 
         if ($p['expmode'] === 'off') {
             return sprintf(':put (",,%s,,,noexp,%s,")', (int) ($p['price'] ?? 0), $lockLabel)
-                . ($p['lock'] ? '; [:local mac $"mac-address"; /ip hotspot user set mac-address=$mac [find where name=$user]]' : '');
+                . ($p['lock'] ? '; [:local mac $"mac-address"; :local u [/ip hotspot user find where name=$user]; :if ([:len $u] = 1) do={ /ip hotspot user set $u mac-address=$mac }]' : '');
         }
 
         $meta = sprintf(':put (",%s,%s,%s,%s,,%s,")', $p['expmode'], $p['price'], $p['validity'], $sprice, $lockLabel);
@@ -175,8 +183,17 @@ ROS;
     :if ([:pic \$c 3] = "/" and [:pic \$c 6] = "/") do={ :set ed [\$dnum d=\$c]; :set et [\$tnum t=[:pic \$c 12 20]]; :set ok 1 }
     :if (\$ok = 1 and \$ed > 0) do={
       :if (\$ed < \$today or (\$ed = \$today and (\$et < \$curt or \$et = \$curt))) do={
-        :if (\$mode = "rem") do={ /ip hotspot user remove \$i } else={ /ip hotspot user set \$i limit-uptime=1s }
-        /ip hotspot active remove [find where user=\$nm]
+        :if ([:len [/ip hotspot user find where name=\$nm]] = 1) do={
+          :if (\$mode = "rem") do={ /ip hotspot user remove \$i } else={ /ip hotspot user set \$i limit-uptime=1s }
+          /ip hotspot active remove [find where user=\$nm]
+        } else={
+          :global znKembarExp
+          :if ([:typeof \$znKembarExp] != "array") do={ :set znKembarExp [:toarray ""] }
+          :if ([:typeof (\$znKembarExp->\$nm)] = "nothing") do={
+            :set (\$znKembarExp->\$nm) 1
+            :log warning "zeronet-expire: nama kembar \$nm dilewati"
+          }
+        }
       }
     }
   }

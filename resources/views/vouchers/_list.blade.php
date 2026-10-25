@@ -11,6 +11,9 @@
       <button type="button" class="btn btn-ghost btn-sm" data-massal-semua hidden></button>
       <span class="vl-massal-aksi">
         <button type="button" class="btn btn-ghost btn-sm" data-massal-batal>Batal</button>
+        @if ($batch->router_id)
+          <button type="button" class="btn btn-sm vb-btn-bahaya" data-massal-habis>Hapus Habis</button>
+        @endif
         <button type="button" class="btn btn-sm vb-btn-bahaya" data-massal-hapus>Hapus</button>
       </span>
     </div>
@@ -40,7 +43,7 @@
             @if ($bolehHapus)
               <td class="vl-pilih"><input type="checkbox" data-pilih value="{{ $v->id }}" data-status="{{ $v->status_efektif }}" aria-label="Pilih kartu {{ $v->username }}"></td>
             @endif
-            <td class="ix">{{ $loop->iteration + ($vouchers->currentPage() - 1) * $vouchers->perPage() }}</td>
+            <td class="ix">{{ $v->nomor ?? $loop->iteration + ($vouchers->currentPage() - 1) * $vouchers->perPage() }}</td>
             <td class="mono fw-6 vl-kode">{{ $v->username }}</td>
             <td class="mono vl-pass">@if ($v->username !== $v->password)<span class="vl-lbl">pass </span>{{ $v->password }}@endif</td>
             <td class="vl-status">
@@ -52,7 +55,9 @@
             <td class="fs-125 vl-mulai">@if ($v->activated_at)<span class="vl-lbl">dipakai </span>{{ $v->activated_at->format('d M Y H:i') }}@endif</td>
             <td class="fs-125 vl-akhir">@if ($v->expired_at)<span class="vl-lbl">habis </span>{{ $v->expired_at->format('d M Y H:i') }}@endif</td>
             <td class="vl-router">
-              @if ($v->sync_status === 'success')
+              @if ($v->sync_status === 'success' && $v->status === 'missing')
+                <span class="badge err no-dot" title="Tidak ditemukan di router saat dicek{{ $v->checked_at ? ' ' . $v->checked_at->format('d M Y H:i') : '' }}">hilang</span>
+              @elseif ($v->sync_status === 'success')
                 <span class="badge ok no-dot" title="Sudah ada di router">ada</span>
               @elseif ($v->sync_status === 'failed')
                 <span class="badge err" title="{{ $v->sync_error }}">gagal</span>

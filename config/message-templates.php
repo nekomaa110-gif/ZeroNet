@@ -125,6 +125,22 @@ return [
                             . "Riwayat invois lengkap di portal: {portal_login}",
         ],
 
+        'voucher_baru' => [
+            'group'        => 'pelanggan',
+            'label'        => 'Voucher Baru',
+            'description'  => 'Teks yang menyertai gambar voucher saat user baru dibuat dengan pilihan kirim otomatis. '
+                            . 'Username dan password hanya ada di gambar, tidak di teks ini.',
+            'placeholders' => ['name', 'username', 'paket', 'expire'],
+            'default'      => "🎟️ *Voucher WiFi ZeroNet*\n\n"
+                            . "Halo {name}, ini voucher internet kamu. Username dan password ada di gambar.\n\n"
+                            . "Akun: *{username}*\n"
+                            . "Paket: *{paket}*\n"
+                            . "Aktif sampai: *{expire}*\n\n"
+                            . "Cek status akun kapan saja di portal:\n"
+                            . "🔗 {portal_login}\n\n"
+                            . "Simpan baik-baik dan jangan dibagikan ke orang lain 🙏",
+        ],
+
         'perpanjangan_manual' => [
             'group'        => 'pelanggan',
             'label'        => 'Akun Diperpanjang Admin',
@@ -170,15 +186,14 @@ return [
         'admin_ringkasan_reminder' => [
             'group'        => 'admin',
             'label'        => 'Ringkasan Reminder Expired',
-            'description'  => 'Sekali tiap kali jadwal reminder jalan dan ada yang terkirim. '
-                            . 'Menggantikan notifikasi "Invoice Perlu Dibuat Manual" yang dulu terpisah, '
-                            . 'daftarnya sekarang ikut di dalam pesan ini lewat {blok_manual}.',
+            'description'  => 'Sekali tiap kali jadwal reminder jalan dan ada tagihan yang terkirim. '
+                            . 'Hanya berisi pelanggan yang ditagih; pelanggan tanpa harga ditandai di daftar user, bukan di pesan ini. '
+                            . '{tanpa_tagihan} selalu 0 dan {blok_manual} selalu kosong (usang, disimpan untuk template lama).',
             'placeholders' => ['total', 'dengan_tagihan', 'tanpa_tagihan', 'daftar', 'blok_manual', 'waktu', 'panel_url'],
             'default'      => "🔔 *Reminder Expired Terkirim*\n\n"
                             . "Waktu: {waktu}\n"
-                            . "Total: *{total}* pelanggan, {dengan_tagihan} dengan tagihan, {tanpa_tagihan} tanpa nominal\n\n"
-                            . "{daftar}"
-                            . "{blok_manual}\n"
+                            . "Total: *{total}* pelanggan, {dengan_tagihan} dengan tagihan\n\n"
+                            . "{daftar}\n"
                             . "Pantau di:\n"
                             . "{panel_url}/admin/billing",
         ],

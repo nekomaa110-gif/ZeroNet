@@ -6,6 +6,15 @@
 @section('page-class', 'pg-user-hotspot-create')
 
 @section('content')
+  @php
+    $isAdmin      = (bool) auth()->user()?->isAdmin();
+    $hargaDiketik = array_key_exists('price', (array) session()->getOldInput());
+    $hargaAwal    = $hargaPaket[old('group')] ?? null;
+    $nilaiHarga   = $hargaDiketik
+        ? (is_string(old('price')) ? old('price') : '')
+        : ($hargaAwal ? number_format($hargaAwal, 0, ',', '.') : '');
+    $labelHarga   = $hargaAwal ? 'Harga: ' . \App\Services\CustomerPriceService::rupiah($hargaAwal) . ' (harga paket)' : 'Belum ada harga';
+  @endphp
 
   <header class="page-head">
     <div>
@@ -21,7 +30,7 @@
   </header>
 
   <form method="POST" action="{{ route('user-hotspot.store') }}"
-        x-data="userForm()"
+        x-data="userForm()" @submit="periksa($event)" @pageshow.window="mengirim = false" novalidate
         style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:flex-start">
     @csrf
 
@@ -43,18 +52,21 @@
             <label>Username <span class="req">*</span></label>
             <div class="input-group">
               <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-              <input type="text" name="username" x-model="username" value="{{ old('username') }}"
-                     autocomplete="off" class="input mono" placeholder="contoh: user01">
+              <input type="text" id="username" name="username" x-model="username" @input="bersihkanUsername($event.target)" value="{{ old('username') }}"
+                     autocomplete="off" class="input mono" placeholder="contoh: user01"
+                     aria-describedby="username-hint" :class="{ 'is-invalid': galat.username }">
             </div>
-            @error('username') <small class="err-line">{{ $message }}</small> @enderror
-            <small class="hint">Huruf kecil, angka, strip, dan titik. Tidak boleh duplikat.</small>
+            <small class="err-line" x-show="galat.username" x-text="galat.username" x-cloak></small>
+            @error('username') <small class="err-line" x-show="!galat.username">{{ $message }}</small> @enderror
+            <small class="err-line" x-show="catatanUsername" x-text="catatanUsername" x-cloak></small>
+            <small class="hint" id="username-hint">Huruf, angka, - dan _. Tanpa spasi, maksimal 50 karakter.</small>
           </div>
 
           <div class="field">
             <label>Password <span class="req">*</span></label>
             <div class="input-group rel">
               <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <input :type="showPw ? 'text' : 'password'" id="password" name="password" x-model="password"
+              <input :type="showPw ? 'text' : 'password'" id="password" name="password" x-model="password" @input="galat.password = ''" :class="{ 'is-invalid': galat.password }"
                      autocomplete="new-password" class="input mono" style="padding-right:40px">
               <button type="button" @click="showPw = !showPw" tabindex="-1"
                       style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--text-3);padding:6px;cursor:pointer">
@@ -69,7 +81,8 @@
                 Generate
               </button>
             </div>
-            @error('password') <small class="err-line">{{ $message }}</small> @enderror
+            <small class="err-line" x-show="galat.password" x-text="galat.password" x-cloak></small>
+            @error('password') <small class="err-line" x-show="!galat.password">{{ $message }}</small> @enderror
           </div>
         </div>
       </div>
@@ -104,6 +117,19 @@
           </div>
 
           <div class="field">
+            <label for="price">Harga (Rp)</label>
+            @if ($isAdmin)
+              <input type="text" id="price" name="price" x-model="harga" @input="ketikHarga($event.target.value)"
+                     value="{{ $nilaiHarga }}" inputmode="numeric" autocomplete="off" class="input mono" placeholder="Belum ada harga"
+                     aria-describedby="price-hint{{ $errors->has('price') ? ' price-error' : '' }}" @error('price') aria-invalid="true" @enderror>
+              @error('price') <small class="err-line" id="price-error">{{ $message }}</small> @enderror
+              <small class="hint" id="price-hint">Kosongkan bila belum ada harga; user tanpa harga tidak ditagih otomatis.</small>
+            @else
+              <p class="hint" x-text="labelHargaPaket()">{{ $labelHarga }}</p>
+            @endif
+          </div>
+
+          <div class="field">
             <label>Tanggal Expire</label>
             <input type="date" id="expiry" name="expiry" x-model="expiry" value="{{ old('expiry') }}" class="input">
             @error('expiry') <small class="err-line">{{ $message }}</small> @enderror
@@ -112,8 +138,39 @@
         </div>
       </div>
 
+      <div class="card">
+        <div class="card-head">
+          <div class="head-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </div>
+          <div>
+            <h3>Kirim Voucher</h3>
+            <p class="sub-note">Pilih apakah panel mengirim gambar voucher ke WhatsApp pelanggan.</p>
+          </div>
+        </div>
+        <div class="card-pad stack-14">
+
+          <fieldset class="dr-inv-opsi" style="margin:0">
+            <legend>Cara kirim voucher</legend>
+            <label class="dr-inv-radio"><input type="radio" name="kirim_voucher" value="manual" x-model="kirimVoucher" @checked(old('kirim_voucher', 'manual') === 'manual')> Saya kirim sendiri</label>
+            <label class="dr-inv-radio"><input type="radio" name="kirim_voucher" value="otomatis" x-model="kirimVoucher" @checked(old('kirim_voucher') === 'otomatis')> Kirim otomatis lewat WhatsApp</label>
+          </fieldset>
+          @error('kirim_voucher') <small class="err-line">{{ $message }}</small> @enderror
+
+          <div class="field">
+            <label for="phone">No. WhatsApp <span class="req">*</span></label>
+            <input type="tel" id="phone" name="phone" x-model="phone" @input="galat.phone = ''" :class="{ 'is-invalid': galat.phone }" value="{{ old('phone') }}" inputmode="tel" autocomplete="off"
+                   placeholder="0812..." class="input mono"
+                   aria-describedby="phone-hint{{ $errors->has('phone') ? ' phone-error' : '' }}" @error('phone') aria-invalid="true" @enderror>
+            <small class="err-line" x-show="galat.phone" x-text="galat.phone" x-cloak></small>
+            @error('phone') <small class="err-line" id="phone-error" x-show="!galat.phone">{{ $message }}</small> @enderror
+            <small class="hint" id="phone-hint">Wajib. Dipakai untuk tagihan, pengingat masa aktif, dan kirim voucher. Format 0812..., 62812..., atau +62812...</small>
+          </div>
+        </div>
+      </div>
+
       <div style="display:flex;gap:10px">
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-primary" :disabled="mengirim">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="margin-right:6px;vertical-align:-2px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Simpan User
         </button>
@@ -134,6 +191,7 @@
         <div class="kvp"><span class="k">Profil</span><span class="v" x-text="paket || '(Tidak ada)'"></span></div>
         <div class="kvp"><span class="k">Status</span><span class="v"><span class="badge ok">Akan Aktif</span></span></div>
         <div class="kvp"><span class="k">Expire</span><span class="v" x-text="expiry || 'Tidak ada'"></span></div>
+        <div class="kvp"><span class="k">Voucher</span><span class="v" x-text="kirimVoucher === 'otomatis' ? 'Dikirim lewat WhatsApp' : 'Kirim sendiri'"></span></div>
       </div>
 
       <div class="card card-pad" style="background:color-mix(in srgb,var(--info) 6%,transparent);border:1px solid color-mix(in srgb,var(--info) 30%,var(--border))">
@@ -142,7 +200,7 @@
           <div>
             <h4 style="margin:0 0 6px;font-size:13px">Tips</h4>
             <ul style="margin:0;padding-left:16px;color:var(--text-2);font-size:12.5px;line-height:1.7">
-              <li>Kirim kredensial via WhatsApp Gateway setelah disimpan</li>
+              <li>Pilih kirim otomatis supaya voucher langsung masuk ke WhatsApp pelanggan</li>
               <li>User dengan expire akan otomatis di-disable</li>
               <li>Profil bisa diubah kapan saja</li>
             </ul>
@@ -159,10 +217,68 @@
 <script>
 function userForm() {
   return {
-    username: '{{ old('username') }}',
+    username: @js((string) old('username')),
     password: '',
     paket: '{{ old('group') }}',
     expiry: '{{ old('expiry') }}',
+    kirimVoucher: @js(old('kirim_voucher', 'manual')),
+    phone: @js(is_string(old('phone')) ? old('phone') : ''),
+    galat: { username: '', password: '', phone: '' },
+    catatanUsername: '',
+    polaUsername: new RegExp(@js(trim(\App\Http\Requests\Admin\RadiusUserRequest::USERNAME_BARU_REGEX, '/'))),
+    polaNomor: new RegExp(@js(trim(\App\Services\CustomerContactService::NOMOR_REGEX, '/'))),
+    maksUsername: @js(\App\Http\Requests\Admin\RadiusUserRequest::USERNAME_BARU_MAKS),
+    bersihkanUsername(el) {
+      const nilai = String(el.value ?? '');
+      const bersih = nilai.replace(/[^A-Za-z0-9_-]/g, '');
+      this.galat.username = '';
+      if (bersih === nilai) {
+        this.catatanUsername = '';
+        return;
+      }
+      const posisi = nilai.slice(0, el.selectionStart ?? nilai.length).replace(/[^A-Za-z0-9_-]/g, '').length;
+      this.catatanUsername = 'Karakter tidak didukung!';
+      this.username = bersih;
+      this.$nextTick(() => el.setSelectionRange(posisi, posisi));
+    },
+    periksa(e) {
+      const u = this.username.trim();
+      const p = this.phone.trim();
+      this.galat.username = u === '' ? 'Username wajib diisi.'
+        : u.length > this.maksUsername ? 'Username maksimal ' + this.maksUsername + ' karakter.'
+        : !this.polaUsername.test(u) ? 'Username hanya boleh huruf, angka, - dan _.' : '';
+      this.galat.password = this.password.trim() === '' ? 'Password wajib diisi.' : '';
+      this.galat.phone = p === '' ? 'Nomor WhatsApp wajib diisi.'
+        : !this.polaNomor.test(p) ? 'Nomor harus format Indonesia: 0812..., 62812..., atau +62812...' : '';
+      const salah = ['username', 'password', 'phone'].find((k) => this.galat[k]);
+      if (salah) {
+        e.preventDefault();
+        this.$nextTick(() => document.getElementById(salah)?.focus());
+        return;
+      }
+      this.mengirim = true;
+    },
+    harga: @js($nilaiHarga),
+    hargaDiketik: @js($hargaDiketik),
+    petaHarga: @js($hargaPaket),
+    init() {
+      this.$watch('paket', () => {
+        if (!this.hargaDiketik) this.harga = this.formatRibuan(this.petaHarga[this.paket] ?? '');
+      });
+    },
+    formatRibuan(nilai) {
+      const angka = String(nilai ?? '').replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+      return angka.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    },
+    ketikHarga(nilai) {
+      this.hargaDiketik = true;
+      this.harga = this.formatRibuan(nilai);
+    },
+    labelHargaPaket() {
+      const n = this.petaHarga[this.paket];
+      return n ? 'Harga: Rp' + this.formatRibuan(n) + ' (harga paket)' : 'Belum ada harga';
+    },
+    mengirim: false,
     showPw: false,
     generatePw() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

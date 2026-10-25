@@ -6,12 +6,15 @@ use App\Jobs\SendWhatsAppImage;
 use App\Jobs\SendWhatsAppMessage;
 use App\Models\CustomerContact;
 use App\Models\Invoice;
+use App\Models\RadUserGroup;
+use App\Services\CustomerPriceService;
 use App\Services\BillingNotificationService;
 use App\Services\InvoiceService;
 use App\Services\MessageTemplateService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SendExpiryReminders extends Command
 {
@@ -23,6 +26,7 @@ class SendExpiryReminders extends Command
     public function __construct(
         private InvoiceService $invoices,
         private BillingNotificationService $notifier,
+        private CustomerPriceService $prices,
     ) {
         parent::__construct();
     }
@@ -46,6 +50,7 @@ class SendExpiryReminders extends Command
                   ->orWhereRaw("customer_contacts.reminder_sent_at < DATE_SUB(STR_TO_DATE(radcheck.value, '%d %b %Y %H:%i:%s'), INTERVAL 2 DAY)");
             })
             ->when($this->option('only'), fn ($q, $only) => $q->where('customer_contacts.username', $only))
+            ->orderBy('customer_contacts.id')
             ->select(
                 'customer_contacts.id as contact_id',
                 'customer_contacts.username',
@@ -60,117 +65,136 @@ class SendExpiryReminders extends Command
             return self::SUCCESS;
         }
 
-        $portal     = (string) config('services.billing.portal_url');
-        $waNotif    = (bool)   config('services.billing.wa_notifications', true);
-        $testMode   = (bool)   config('services.billing.wa_test_mode', false);
+        $dry      = (bool) $this->option('dry');
+        $waNotif  = (bool) config('services.billing.wa_notifications', true);
+        $testMode = (bool) config('services.billing.wa_test_mode', false);
         $testNumber = (string) config('services.billing.wa_test_number');
 
         $count       = 0;
         $withInvoice = 0;
-        $needsManual = [];
+        $tanpaHarga  = 0;
+        $gagal       = 0;
         $sentLines   = [];
 
         foreach ($rows as $r) {
-            $expiry  = $this->parseExpiry($r->expiry_raw);
-            $expiryStr = $expiry
-                ? $expiry->format('d M Y') . ' pukul ' . $expiry->format('H:i')
-                : $r->expiry_raw;
-
-            $sapaan = $r->name ?: $r->username;
-
-            $plan = $this->planInvoice($r->username, $expiry);
-
-            if ($plan['mode'] === 'none') {
-                $needsManual[] = "• *{$r->username}* (habis {$expiry?->format('d M Y')})";
-            }
-
-            $target = $testMode
-                ? $testNumber
-                : \App\Services\WhatsAppService::normalizePhone($r->phone);
-
-            if ($this->option('dry')) {
-                $note    = $testMode ? " [→ test {$testNumber}]" : '';
-                $tagihan = match ($plan['mode']) {
-                    'existing' => 'invoice #' . $plan['invoice']->id . ' (sudah ada) Rp ' . number_format($plan['invoice']->amount, 0, ',', '.'),
-                    'new'      => 'buat invoice baru Rp ' . number_format($plan['amount'], 0, ',', '.'),
-                    default    => 'TANPA invoice (belum ada riwayat lunas)',
-                };
-                $this->line("[DRY] {$r->phone} ({$r->username}), habis {$r->expiry_raw}: {$tagihan}{$note}");
-                $count++;
-                $withInvoice += $plan['mode'] === 'none' ? 0 : 1;
+            try {
+                $hasil = $this->prosesSatu($r, $dry, $waNotif, $testMode, $testNumber);
+            } catch (\Throwable $e) {
+                $gagal++;
+                Log::error('wa.reminders.gagal', ['username' => $r->username, 'error' => $e->getMessage()]);
+                $this->error("[GAGAL] {$r->username}: {$e->getMessage()}");
                 continue;
-            }
-
-            if (! $waNotif) {
-                $this->line('[SKIP] BILLING_WA_NOTIFICATIONS=false');
-                $count++;
-                continue;
-            }
-
-            $invoice = $plan['mode'] === 'new'
-                ? $this->invoices->createForUser($r->username, $plan['amount'], $plan['due_date'], $plan['profile'])
-                : ($plan['invoice'] ?? null);
-
-            $delay = now()->addSeconds(rand(2, 30));
-
-            CustomerContact::where('id', $r->contact_id)->update(['reminder_sent_at' => now()]);
-
-            if ($invoice) {
-                $vars = [
-                    'name'        => $sapaan,
-                    'username'    => $r->username,
-                    'expiry'      => $expiryStr,
-                    'amount'      => 'Rp ' . number_format($invoice->amount, 0, ',', '.'),
-                    'due_date'    => optional($invoice->due_date)->translatedFormat('d M Y') ?? '-',
-                    'invoice_id'  => $invoice->id,
-                    'invoice_url' => $portal . '/i/' . $invoice->slug,
-                ];
-
-                $caption  = MessageTemplateService::render('reminder_invoice', $vars);
-                $fallback = MessageTemplateService::render('reminder_invoice_teks', $vars);
-
-                SendWhatsAppImage::dispatch(
-                    $target,
-                    $portal . '/i/' . $invoice->slug . '?image=1',
-                    $caption,
-                    $r->contact_id,
-                    null,
-                    [],
-                    $fallback,
-                    true,
-                )->delay($delay);
-
-                $sentLines[] = "• *{$r->username}* (habis {$expiry?->format('d M Y')}) • "
-                    . 'Rp ' . number_format($invoice->amount, 0, ',', '.') . " (inv #{$invoice->id})";
-                $withInvoice++;
-            } else {
-                $msg = MessageTemplateService::render('reminder_polos', [
-                    'name'     => $sapaan,
-                    'username' => $r->username,
-                    'expiry'   => $expiryStr,
-                ]);
-
-                SendWhatsAppMessage::dispatch($target, $msg, $r->contact_id, null, true)->delay($delay);
-
-                $sentLines[] = "• *{$r->username}* (habis {$expiry?->format('d M Y')}) • nominal belum diketahui";
             }
 
             $count++;
+            $withInvoice += in_array($hasil['mode'], ['existing', 'new'], true) ? 1 : 0;
+            $tanpaHarga  += $hasil['mode'] === 'tanpa_harga' ? 1 : 0;
+
+            if ($hasil['baris'] !== null) {
+                $sentLines[] = $hasil['baris'];
+            }
         }
 
-        if ($sentLines && ! $this->option('dry') && $waNotif) {
-            $this->notifyAdminSummary($sentLines, $needsManual, $withInvoice);
+        if ($sentLines && ! $dry && $waNotif) {
+            $this->notifyAdminSummary($sentLines);
         }
 
-        $prefix   = $this->option('dry') ? '[DRY] ' : '';
-        $modeNote = $testMode ? " (test mode → {$testNumber})" : '';
-        $this->info("{$prefix}Total {$count} reminder{$modeNote}, {$withInvoice} dengan tagihan, " . count($needsManual) . ' perlu invoice manual.');
+        $prefix    = $dry ? '[DRY] ' : '';
+        $modeNote  = $testMode ? " (test mode → {$testNumber})" : '';
+        $gagalNote = $gagal > 0 ? ", {$gagal} gagal" : '';
+        $this->info("{$prefix}Total {$count} reminder{$modeNote}, {$withInvoice} dengan tagihan, {$tanpaHarga} tanpa harga{$gagalNote}.");
 
-        return self::SUCCESS;
+        return $gagal > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    private function prosesSatu(object $r, bool $dry, bool $waNotif, bool $testMode, string $testNumber): array
+    {
+        $portal = (string) config('services.billing.portal_url');
+        $expiry = $this->parseExpiry($r->expiry_raw);
+        $expiryStr = $expiry
+            ? $expiry->format('d M Y') . ' pukul ' . $expiry->format('H:i')
+            : $r->expiry_raw;
+
+        $sapaan = $r->name ?: $r->username;
+        $plan   = $this->planInvoice($r->username, $expiry);
+        $target = $testMode
+            ? $testNumber
+            : \App\Services\WhatsAppService::normalizePhone($r->phone);
+
+        if ($dry) {
+            $note    = $testMode ? " [→ test {$testNumber}]" : '';
+            $tagihan = match ($plan['mode']) {
+                'existing' => 'invoice #' . $plan['invoice']->id . ' (sudah ada) Rp ' . number_format($plan['invoice']->amount, 0, ',', '.'),
+                'new'      => 'buat invoice baru Rp ' . number_format($plan['amount'], 0, ',', '.'),
+                'gratis'   => 'TANPA invoice (akun gratis)',
+                default    => 'TANPA invoice (belum ada harga)',
+            };
+            $this->line("[DRY] {$r->phone} ({$r->username}), habis {$r->expiry_raw}: {$tagihan}{$note}");
+
+            return ['mode' => $plan['mode'], 'baris' => null];
+        }
+
+        if (! $waNotif) {
+            $this->line('[SKIP] BILLING_WA_NOTIFICATIONS=false');
+
+            return ['mode' => 'skip', 'baris' => null];
+        }
+
+        $invoice = $plan['mode'] === 'new'
+            ? $this->invoices->createForUser($r->username, $plan['amount'], $plan['due_date'], $plan['profile'])
+            : ($plan['invoice'] ?? null);
+
+        $delay = now()->addSeconds(rand(2, 30));
+        $baris = null;
+
+        if ($invoice) {
+            $vars = [
+                'name'        => $sapaan,
+                'username'    => $r->username,
+                'expiry'      => $expiryStr,
+                'amount'      => 'Rp ' . number_format($invoice->amount, 0, ',', '.'),
+                'due_date'    => optional($invoice->due_date)->translatedFormat('d M Y') ?? '-',
+                'invoice_id'  => $invoice->id,
+                'invoice_url' => $portal . '/i/' . $invoice->slug,
+            ];
+
+            $caption  = MessageTemplateService::render('reminder_invoice', $vars);
+            $fallback = MessageTemplateService::render('reminder_invoice_teks', $vars);
+
+            SendWhatsAppImage::dispatch(
+                $target,
+                $portal . '/i/' . $invoice->slug . '?image=1',
+                $caption,
+                $r->contact_id,
+                null,
+                [],
+                $fallback,
+                true,
+            )->delay($delay);
+
+            $baris = "• *{$r->username}* (habis {$expiry?->format('d M Y')}) • "
+                . 'Rp ' . number_format($invoice->amount, 0, ',', '.') . " (inv #{$invoice->id})";
+        } else {
+            $msg = MessageTemplateService::render('reminder_polos', [
+                'name'     => $sapaan,
+                'username' => $r->username,
+                'expiry'   => $expiryStr,
+            ]);
+
+            SendWhatsAppMessage::dispatch($target, $msg, $r->contact_id, null, true)->delay($delay);
+        }
+
+        CustomerContact::where('id', $r->contact_id)->update(['reminder_sent_at' => now()]);
+
+        return ['mode' => $plan['mode'], 'baris' => $baris];
     }
 
     private function planInvoice(string $username, ?Carbon $expiry): array
     {
+        if ($this->prices->isGratis($username)) {
+            return ['mode' => 'gratis'];
+        }
+
         $open = Invoice::where('username', $username)
             ->whereIn('status', [Invoice::STATUS_DRAFT, Invoice::STATUS_UNPAID, Invoice::STATUS_PENDING])
             ->orderByDesc('id')
@@ -180,36 +204,29 @@ class SendExpiryReminders extends Command
             return ['mode' => 'existing', 'invoice' => $open];
         }
 
-        $lastPaid = Invoice::where('username', $username)
-            ->where('status', Invoice::STATUS_PAID)
-            ->orderByDesc('id')
-            ->first();
+        $harga = $this->prices->harga($username);
 
-        if (! $lastPaid) {
-            return ['mode' => 'none'];
+        if ($harga === null) {
+            return ['mode' => 'tanpa_harga'];
         }
 
         return [
             'mode'     => 'new',
-            'amount'   => (int) $lastPaid->amount,
-            'profile'  => $lastPaid->profile ?: InvoiceService::DEFAULT_PROFILE,
+            'amount'   => $harga,
+            'profile'  => RadUserGroup::where('username', $username)->orderBy('priority')->value('groupname') ?: InvoiceService::DEFAULT_PROFILE,
             'due_date' => ($expiry ? $expiry->copy() : now()->addDay())->endOfDay(),
         ];
     }
 
-    private function notifyAdminSummary(array $sent, array $manual, int $withInvoice): void
+    private function notifyAdminSummary(array $sent): void
     {
-        $blokManual = $manual === [] ? '' : "\n⚠️ *Perlu invoice manual* (belum ada riwayat lunas):\n"
-            . implode("\n", $manual) . "\n"
-            . "Buat di {$this->panelUrl()}/admin/billing/create\n";
-
         $this->notifier->notifyAdmin(
             MessageTemplateService::render('admin_ringkasan_reminder', [
                 'total'          => count($sent),
-                'dengan_tagihan' => $withInvoice,
-                'tanpa_tagihan'  => count($sent) - $withInvoice,
+                'dengan_tagihan' => count($sent),
+                'tanpa_tagihan'  => 0,
                 'daftar'         => implode("\n", $sent) . "\n",
-                'blok_manual'    => $blokManual,
+                'blok_manual'    => '',
                 'waktu'          => now()->translatedFormat('d M Y H:i'),
                 'panel_url'      => $this->panelUrl(),
             ]),

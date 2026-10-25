@@ -9,13 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Voucher extends Model
 {
     protected $fillable = [
-        'batch_id', 'router_id', 'username', 'password', 'profile', 'server', 'comment',
+        'batch_id', 'nomor', 'router_id', 'username', 'password', 'profile', 'server', 'comment',
         'limit_uptime', 'limit_bytes', 'price',
         'status', 'sync_status', 'sync_error', 'synced_at',
         'printed_at', 'activated_at', 'expired_at', 'uptime_used', 'checked_at',
     ];
 
     protected $casts = [
+        'nomor'        => 'integer',
         'limit_bytes'  => 'integer',
         'price'        => 'integer',
         'uptime_used'  => 'integer',

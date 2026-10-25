@@ -46,7 +46,8 @@
               {{ $hint['contact']?->name ?? 'Belum ada nama kontak' }}
               · {{ $hint['contact']?->phone ?? 'belum ada no HP' }}
               · berlaku sampai {{ $hint['expiry']?->translatedFormat('d M Y') ?? '' }}
-            </span>
+            </span><br>
+            <span class="muted">{{ $hargaUser ? 'Harga user: ' . \App\Services\CustomerPriceService::rupiah($hargaUser) : 'Belum ada harga' }}</span>
           </div>
         </div>
       @elseif ($hint && !$hint['exists'])
@@ -61,8 +62,8 @@
           <label for="amount">Jumlah <span class="req">*</span></label>
           <div class="input-prefix">
             <span class="prefix">Rp</span>
-            <input id="amount" name="amount" type="number" class="input" min="1000" step="1000"
-                   value="{{ old('amount', 200000) }}" required>
+            <input id="amount" name="amount" type="number" class="input" min="1000" step="1"
+                   value="{{ old('amount', $hargaUser ?? 200000) }}" required>
           </div>
           @error('amount') <div class="err-text">{{ $message }}</div> @enderror
         </div>

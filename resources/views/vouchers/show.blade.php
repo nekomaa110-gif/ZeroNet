@@ -110,7 +110,12 @@
         <option value="pending" @selected($filters['sync'] === 'pending')>Belum dikirim</option>
       </select>
 
-      <div class="tb-end"><span class="live">Live</span></div>
+      <div class="tb-end">
+        @if (auth()->user()?->isAdmin() && $batch->router_id)
+          <button type="button" class="btn btn-sm vb-btn-bahaya" data-hapus-habis-semua>Hapus semua Habis</button>
+        @endif
+        <span class="live">Live</span>
+      </div>
     </form>
 
     <div id="voucher-list" data-live-results>
@@ -140,16 +145,7 @@
           <b>Hapus dan cabut dari router</b>
           <p>Semua kartu dihapus juga dari router {{ $batch->router_label }}. Kartu yang sudah terjual langsung mati. Perlu password Anda.</p>
         </div>
-        <form class="inline-form" method="POST" action="{{ route('vouchers.destroy', $batch) }}"
-              data-confirm="Hapus batch {{ $batch->code }} DAN semua kartunya dari router {{ $batch->router_label }}? Kartu yang sudah terjual akan langsung mati."
-              data-confirm-title="Hapus dari Router"
-              data-confirm-action="Hapus semuanya"
-              data-confirm-variant="danger"
-              data-confirm-password="1">
-          @csrf @method('DELETE')
-          <input type="hidden" name="remove_from_router" value="1">
-          <button type="submit" class="btn btn-sm vb-btn-bahaya">Hapus + cabut dari router</button>
-        </form>
+        <button type="button" class="btn btn-sm vb-btn-bahaya" data-hapus-batch-router>Hapus + cabut dari router</button>
       </div>
     </section>
   @endif
@@ -294,7 +290,13 @@
   });
 
   @if (auth()->user()?->isAdmin())
-  const hapusMassal = @json(route('vouchers.destroy-many', $batch));
+  const hapusMassal    = @json(route('vouchers.destroy-many', $batch));
+  const pratinjauKartu = @json(route('vouchers.preview-destroy-many', $batch), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES);
+  const pratinjauBatch = @json(route('vouchers.preview-destroy', $batch), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES);
+  const hapusBatch     = @json(route('vouchers.destroy', $batch));
+  const daftarBatch    = @json(route('vouchers.index'));
+  const kodeBatch      = @json($batch->code);
+  const perkiraan      = @json(max(1, (int) $batch->quantity));
   const labelStatus = { ready: 'Belum dipakai', active: 'Aktif', expired: 'Habis', disabled: 'Dinonaktifkan', missing: 'Hilang dari router' };
   const angka = n => Number(n).toLocaleString('id-ID');
   let semuaFilter = false;
@@ -302,6 +304,122 @@
   const daftar = () => document.getElementById('voucher-list');
   const kotak  = () => Array.from(daftar().querySelectorAll('[data-pilih]'));
   const info   = () => daftar().querySelector('[data-daftar-info]');
+
+  async function kirimJson(url, metode, isi) {
+    const res = await fetch(url, {
+      method: metode,
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+      body: JSON.stringify(isi),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  }
+
+  function barisDetail(data) {
+    const baris = (data.ditahan || []).map(d => 'No ' + (d.nomor ?? '-') + ' ' + d.username + ': ' + d.alasan);
+    if (Number(data.ditahan_lain) > 0) baris.push('dan ' + data.ditahan_lain + ' kartu lain');
+    return baris;
+  }
+
+  function sebabGagal(hasil, awal) {
+    return hasil.data.error || hasil.data.message || (awal + ' (HTTP ' + hasil.res.status + ').');
+  }
+
+  async function hapusKartu(tombol, habis, isi) {
+    const badan = habis ? Object.assign({}, isi, { mode: 'habis' }) : isi;
+    tombol.disabled = true;
+    let selesai = false;
+    try {
+      const pra = await kirimJson(pratinjauKartu, 'POST', badan);
+      if (!pra.res.ok || !pra.data.success) {
+        window.vgToast(sebabGagal(pra, 'Gagal memeriksa kartu'), 'err');
+        return;
+      }
+
+      const data     = pra.data;
+      const kandidat = Number(data.kandidat);
+      const detail   = barisDetail(data);
+      const ditahan  = (data.ditahan || []).length + Number(data.ditahan_lain || 0);
+
+      if (kandidat - ditahan < 1) {
+        await window.zeroConfirm({
+          variant: 'warning',
+          title: habis ? 'Hapus kartu Habis' : 'Hapus kartu',
+          message: data.pesan,
+          detail: detail,
+          action: 'Mengerti',
+          cancel: 'Tutup',
+        });
+        return;
+      }
+
+      const akanDihapus = kandidat - ditahan;
+      const jawab = await window.zeroConfirm({
+        variant: 'danger',
+        title: habis ? 'Hapus kartu Habis' : 'Hapus ' + angka(akanDihapus) + ' kartu',
+        message: data.pesan,
+        detail: detail,
+        action: 'Hapus ' + angka(akanDihapus) + ' kartu',
+        requirePassword: true,
+        intent: 'Menghapus ' + akanDihapus + (habis ? ' kartu Habis' : ' kartu') + ' dari batch ' + kodeBatch,
+      });
+      if (!jawab || !jawab.ok) return;
+
+      const hapus = await kirimJson(hapusMassal, 'DELETE', Object.assign({ password: jawab.password }, badan, { jumlah: kandidat }));
+      if (hapus.res.ok && hapus.data.success) {
+        const sebagian = (Array.isArray(hapus.data.ditahan) ? hapus.data.ditahan.length : Number(hapus.data.ditahan || 0)) + Number(hapus.data.ditahan_lain || 0);
+        window.vgToast(hapus.data.message, sebagian ? 'warn' : 'ok');
+        selesai = true;
+        setTimeout(() => location.reload(), sebagian ? 1800 : 900);
+        return;
+      }
+      window.vgToast(sebabGagal(hapus, 'Gagal menghapus'), 'err');
+    } catch (err) {
+      window.vgToast('Gagal menghapus: ' + err.message, 'err');
+    } finally {
+      if (!selesai) tombol.disabled = false;
+    }
+  }
+
+  async function hapusBatchRouter(tombol) {
+    tombol.disabled = true;
+    let selesai = false;
+    try {
+      const pra = await kirimJson(pratinjauBatch, 'POST', {});
+      if (!pra.res.ok || !pra.data.success) {
+        window.vgToast(sebabGagal(pra, 'Gagal memeriksa batch'), 'err');
+        return;
+      }
+
+      const jawab = await window.zeroConfirm({
+        variant: 'danger',
+        title: 'Hapus dari Router',
+        message: 'Batch ' + kodeBatch + ': ' + pra.data.pesan,
+        detail: barisDetail(pra.data),
+        action: 'Hapus semuanya',
+        requirePassword: true,
+        intent: 'Menghapus batch ' + kodeBatch + ' beserta kartunya dari router',
+      });
+      if (!jawab || !jawab.ok) return;
+
+      const hapus = await kirimJson(hapusBatch, 'DELETE', { remove_from_router: true, current_password: jawab.password });
+      if (hapus.res.ok && hapus.data.success) {
+        selesai = true;
+        if (Number(hapus.data.ditahan || 0) === 0) {
+          window.location.href = daftarBatch;
+          return;
+        }
+        window.vgToast(hapus.data.message, 'warn');
+        setTimeout(() => location.reload(), 1800);
+        return;
+      }
+      window.vgToast(sebabGagal(hapus, 'Gagal menghapus'), 'err');
+    } catch (err) {
+      window.vgToast('Gagal menghapus: ' + err.message, 'err');
+    } finally {
+      if (!selesai) tombol.disabled = false;
+    }
+  }
 
   function segarkanMassal() {
     const bar = daftar().querySelector('[data-massal]');
@@ -345,52 +463,41 @@
       segarkanMassal();
       return;
     }
-    const tombol = e.target.closest('[data-massal-hapus]');
+
+    const batchRouter = e.target.closest('[data-hapus-batch-router]');
+    if (batchRouter) { await hapusBatchRouter(batchRouter); return; }
+
+    @if ($batch->router_id)
+    const habisSemua = e.target.closest('[data-hapus-habis-semua]');
+    if (habisSemua) {
+      const form  = habisSemua.closest('form');
+      const bantu = info() ? Number(info().dataset.total) : 0;
+      await hapusKartu(habisSemua, true, {
+        semua: true,
+        jumlah: bantu || perkiraan,
+        sync: form.elements.sync.value,
+        q: form.elements.q.value,
+      });
+      return;
+    }
+    const habisBar = e.target.closest('[data-massal-habis]');
+    @else
+    const habisBar = null;
+    @endif
+    const tombol = habisBar || e.target.closest('[data-massal-hapus]');
     if (!tombol) return;
 
-    const d = info().dataset;
-    const rincian = {};
-    if (semuaFilter) Object.assign(rincian, JSON.parse(d.rincian || '{}'));
-    else kotak().filter(c => c.checked).forEach(c => { rincian[c.dataset.status] = (rincian[c.dataset.status] || 0) + 1; });
-    const jumlah = Object.values(rincian).reduce((a, b) => a + b, 0);
-    if (!jumlah) return;
+    const d   = info().dataset;
+    const ids = kotak().filter(c => c.checked).map(c => Number(c.value));
+    if (!(semuaFilter ? Number(d.total) : ids.length)) return;
 
-    let pesan = angka(jumlah) + ' kartu (' + Object.keys(rincian).map(k => angka(rincian[k]) + ' ' + (labelStatus[k] || k)).join(', ')
-      + ') dihapus dari panel dan dicabut dari router ' + @json($batch->router_label) + '.';
-    if (rincian.active) pesan += ' ' + angka(rincian.active) + ' kartu Aktif masih bisa dipakai pelanggan dan akan langsung terputus.';
+    const habis = !!habisBar;
+    let isi;
+    if (!semuaFilter) isi = { ids: ids };
+    else if (habis) isi = { semua: true, jumlah: Number(d.total), sync: d.sync, q: d.q };
+    else isi = { semua: true, jumlah: Number(d.total), status: d.status, sync: d.sync, q: d.q };
 
-    const jawab = await window.zeroConfirm({
-      title: 'Hapus ' + angka(jumlah) + ' kartu',
-      message: pesan,
-      action: 'Hapus ' + angka(jumlah) + ' kartu',
-      variant: 'danger',
-      requirePassword: true,
-      intent: 'Menghapus ' + jumlah + ' kartu dari batch ' + @json($batch->code),
-    });
-    if (!jawab || !jawab.ok) return;
-
-    const isi = semuaFilter
-      ? { password: jawab.password, semua: true, jumlah: Number(d.total), status: d.status, sync: d.sync, q: d.q }
-      : { password: jawab.password, ids: kotak().filter(c => c.checked).map(c => Number(c.value)) };
-
-    tombol.disabled = true;
-    try {
-      const res = await fetch(hapusMassal, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-        body: JSON.stringify(isi),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
-        window.vgToast(data.message, 'ok');
-        setTimeout(() => location.reload(), 900);
-        return;
-      }
-      window.vgToast(data.error || data.message || ('Gagal menghapus (HTTP ' + res.status + ').'), 'err');
-    } catch (err) {
-      window.vgToast('Gagal menghapus: ' + err.message, 'err');
-    }
-    tombol.disabled = false;
+    await hapusKartu(tombol, habis, isi);
   });
   @endif
 

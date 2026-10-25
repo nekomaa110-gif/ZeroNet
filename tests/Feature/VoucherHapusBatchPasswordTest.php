@@ -28,8 +28,8 @@ class VoucherHapusBatchPasswordTest extends TestCase
         Cache::flush();
 
         $this->palsu = RouterPalsu::mulai([
-            ['name' => 'k1', 'password' => 'p', 'profile' => '4-JAM'],
-            ['name' => 'k2', 'password' => 'p', 'profile' => '4-JAM'],
+            ['name' => 'k1', 'password' => 'p', 'profile' => '4-JAM', 'comment' => 'up-176-uji'],
+            ['name' => 'k2', 'password' => 'p', 'profile' => '4-JAM', 'comment' => 'up-176-uji'],
         ]);
         $router = Router::create([
             'slug' => 'uji', 'name' => 'UJI', 'host' => '127.0.0.1', 'port' => $this->palsu->port, 'username' => 'api', 'password' => 'rahasia',
@@ -40,7 +40,7 @@ class VoucherHapusBatchPasswordTest extends TestCase
         foreach (['k1', 'k2'] as $nama) {
             Voucher::create([
                 'batch_id' => $this->batch->id, 'router_id' => $router->id, 'username' => $nama, 'password' => 'p',
-                'profile' => '4-JAM', 'status' => 'ready', 'sync_status' => 'success',
+                'comment' => 'up-176-uji', 'profile' => '4-JAM', 'status' => 'ready', 'sync_status' => 'success',
             ]);
         }
 

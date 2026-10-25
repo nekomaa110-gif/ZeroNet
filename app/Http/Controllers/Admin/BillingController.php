@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\RadCheck;
 use App\Services\ActivityLogService;
 use App\Services\BillingNotificationService;
+use App\Services\CustomerPriceService;
 use App\Services\InvoiceService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +20,7 @@ class BillingController extends Controller
     public function __construct(
         private InvoiceService $service,
         private BillingNotificationService $notify,
+        private CustomerPriceService $prices,
     ) {}
 
     public function index(Request $request): View
@@ -65,6 +67,7 @@ class BillingController extends Controller
         return view('admin.billing.create', [
             'username' => $username,
             'hint' => $hint,
+            'hargaUser' => $username ? $this->prices->harga($username) : null,
         ]);
     }
 
@@ -129,6 +132,7 @@ class BillingController extends Controller
             'contact' => $contact,
             'expiry' => $expiry,
             'businessWa' => (string) config('services.billing.business_wa'),
+            'hargaUser' => $this->prices->harga($invoice->username),
         ]);
     }
 

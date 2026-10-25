@@ -6,6 +6,10 @@
   };
 @endphp
 
+@if(! empty($panel))
+  @include('voucher-check._kartu-panel', ['p' => $panel])
+@endif
+
 @foreach($r['gagal'] as $g)
   <div class="card card-pad verdict verdict-warn mb-4">
     <b>{{ $g['nama'] }} tidak bisa dihubungi</b>
@@ -70,7 +74,7 @@
       @if($u = $b['user'])
         <div>
           <div class="nav-section pl-0">Data di router</div>
-          <div class="kvp"><span class="k">Username</span><span class="v mono">{{ $u['nama'] }}</span></div>
+          <div class="kvp"><span class="k">Username</span><span class="v mono">{{ $u['nama'] }} @if($u['huruf_beda'])<span class="badge warn no-dot">huruf beda: login akan gagal</span>@endif</span></div>
           <div class="kvp">
             <span class="k">Password</span>
             <span class="v mono">
@@ -108,6 +112,34 @@
               <span class="v" style="color:{{ $b['masa']['lewat'] ? 'var(--err)' : 'var(--ok)' }}">{{ $b['masa']['sisa_teks'] }}</span>
             </div>
           @endif
+        </div>
+      @endif
+
+      @if(count($b['kembar']) > 1)
+        <div style="grid-column:1/-1;border-top:1px solid var(--border);margin-top:10px;padding-top:6px">
+          <div class="nav-section pl-0">Ada {{ count($b['kembar']) }} user bernama sama di router ini</div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead><tr><th>Username</th><th>Password</th><th>Profile</th><th>Terpakai</th><th>Comment</th><th></th></tr></thead>
+              <tbody>
+                @foreach($b['kembar'] as $kb)
+                  <tr>
+                    <td class="mono">{{ $kb['nama'] }} @if($kb['huruf_beda'])<span class="badge warn no-dot">huruf beda: login akan gagal</span>@endif</td>
+                    <td class="mono">
+                      {{ $kb['password'] ?: '(kosong)' }}
+                      @if($kb['pass_cocok'] === true) <span class="badge ok no-dot">cocok</span>
+                      @elseif($kb['pass_cocok'] === false) <span class="badge err no-dot">beda dari kartu</span>
+                      @endif
+                    </td>
+                    <td>{{ $kb['profile'] }}</td>
+                    <td class="mono">{{ $kb['uptime'] }}</td>
+                    <td class="hint">{{ $kb['comment'] }}</td>
+                    <td>@if($kb['dipilih'])<span class="badge info no-dot">dipakai di laporan</span>@endif</td>
+                  </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
         </div>
       @endif
 

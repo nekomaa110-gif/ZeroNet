@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\KartuBerubah;
 use App\Http\Controllers\Controller;
 use App\Jobs\SyncVoucherBatch;
 use App\Models\PrintTemplate;
@@ -9,13 +10,16 @@ use App\Models\Router;
 use App\Models\Voucher;
 use App\Models\VoucherBatch;
 use App\Services\ActivityLogService;
+use App\Services\PencabutKartuService;
 use App\Services\TemplateCetakService;
 use App\Services\VoucherPushService;
 use App\Services\VoucherRouterService;
 use App\Services\VoucherService;
+use App\Services\VoucherTerhapusService;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -29,6 +33,8 @@ class VoucherController extends Controller
     public function __construct(
         private VoucherService $vouchers,
         private VoucherRouterService $routers,
+        private VoucherTerhapusService $terhapus,
+        private PencabutKartuService $pencabut,
     ) {}
 
     public function index(Request $request)
@@ -332,7 +338,6 @@ class VoucherController extends Controller
     public function destroy(Request $request, VoucherBatch $batch)
     {
         $hapusRouter = $request->boolean('remove_from_router');
-        $dicabut     = null;
         $tolak       = fn (string $pesan, string $sebab, int $kode) => $request->expectsJson()
             ? response()->json(['success' => false, 'error' => $pesan, 'sebab' => $sebab], $kode)
             : back()->with('error', $pesan);
@@ -353,12 +358,13 @@ class VoucherController extends Controller
             return $tolak("Batch {$batch->code} sedang disinkronkan ke router. Tunggu sampai selesai, baru hapus.", 'sinkron', 409);
         }
 
-        if ($hapusRouter && $batch->router) {
+        $lewatRouter = $hapusRouter && $batch->router !== null;
+        $susun       = $lewatRouter ? $this->susunHapusBatch($batch, true) : ['kandidat' => collect(), 'tanpaRouter' => collect()];
+        $nilai       = ['per_kartu' => [], 'ringkasan' => array_fill_keys(PencabutKartuService::HASIL, 0)];
+
+        if ($lewatRouter && $susun['kandidat']->isNotEmpty()) {
             try {
-                $names = $batch->vouchers()
-                    ->where(fn ($q) => $q->whereNull('sync_error')->orWhere('sync_error', 'not like', VoucherService::BENTROK_PREFIX . '%'))
-                    ->pluck('username')->all();
-                $dicabut = $this->routers->removeUsers($batch->router, $names)['removed'];
+                $nilai = $this->pencabut->cabut($batch->router, $susun['kandidat'], false);
             } catch (Exception $e) {
                 return $tolak('Gagal menghapus dari router: ' . $e->getMessage(), 'router', 422);
             } finally {
@@ -366,22 +372,80 @@ class VoucherController extends Controller
             }
         }
 
+        $dicabut = $lewatRouter ? $nilai['ringkasan']['dicabut'] : null;
+        $ditahan = $susun['kandidat']->filter(fn (Voucher $v) => $this->ditahan($nilai, $v))->values();
+        $aman    = $susun['kandidat']->reject(fn (Voucher $v) => $this->ditahan($nilai, $v))->concat($susun['tanpaRouter'])->values();
+        $peta    = $aman->mapWithKeys(fn (Voucher $v) => [$v->id => [
+            'hasil'   => $nilai['per_kartu'][$v->id]['hasil'] ?? 'tidak_dicabut',
+            'keadaan' => $nilai['per_kartu'][$v->id]['keadaan'] ?? null,
+        ]])->all();
         $catatan = $dicabut === null ? '' : " {$dicabut} kartu ikut dihapus dari router.";
         $code    = $batch->code;
-        $batch->delete();
+        $rinci   = [
+            'remove_from_router'  => $hapusRouter,
+            'dicabut_router'      => $nilai['ringkasan']['dicabut'],
+            'tidak_ada_di_router' => $nilai['ringkasan']['tidak_ada'],
+            'ditahan'             => array_filter(Arr::only($nilai['ringkasan'], PencabutKartuService::DITAHAN)),
+        ];
+
+        try {
+            DB::transaction(function () use ($batch, $ditahan, $aman, $peta, $request) {
+                if ($ditahan->isEmpty()) {
+                    $this->terhapus->simpanBatch($batch, $peta, $request->user()->id);
+                    $batch->delete();
+
+                    return;
+                }
+
+                if ($aman->isEmpty()) {
+                    return;
+                }
+
+                $this->terhapus->simpan($aman->pluck('id')->all(), 'batch', $peta, $request->user()->id);
+                Voucher::whereIn('id', $aman->pluck('id'))->delete();
+                $batch->forceFill(['quantity' => max(0, (int) $batch->quantity - $aman->count())])->save();
+            });
+        } catch (KartuBerubah $e) {
+            return $tolak($e->getMessage(), 'berubah', 409);
+        }
+
+        if ($ditahan->isNotEmpty()) {
+            $this->vouchers->rangkumBatch($batch->refresh());
+
+            $pesan = "Batch belum terhapus seluruhnya: {$ditahan->count()} kartu ditahan.";
+
+            ActivityLogService::log(
+                action: 'voucher_batch_delete',
+                description: "Batch voucher {$code} belum terhapus seluruhnya: {$aman->count()} kartu dihapus, {$ditahan->count()} ditahan." . $catatan,
+                subjectType: 'voucher_batch',
+                subjectId: (string) $batch->id,
+                properties: $rinci,
+            );
+
+            return $request->expectsJson()
+                ? response()->json([
+                    'success'        => true,
+                    'message'        => $pesan,
+                    'dicabut'        => (int) $dicabut,
+                    'ditahan'        => $ditahan->count(),
+                    'ringkasan'      => $nilai['ringkasan'],
+                    'daftar_ditahan' => $this->ringkasHapusKartu($susun, $nilai)['ditahan'],
+                ])
+                : back()->with('error', $pesan);
+        }
 
         ActivityLogService::log(
             action: 'voucher_batch_delete',
             description: "Menghapus batch voucher {$code}." . $catatan,
             subjectType: 'voucher_batch',
             subjectId: (string) $batch->id,
-            properties: ['remove_from_router' => $hapusRouter],
+            properties: $rinci,
         );
 
         $pesan = "Batch {$code} dihapus dari panel." . $catatan;
 
         return $request->expectsJson()
-            ? response()->json(['success' => true, 'message' => $pesan, 'dicabut' => (int) $dicabut])
+            ? response()->json(['success' => true, 'message' => $pesan, 'dicabut' => (int) $dicabut, 'ditahan' => 0])
             : redirect()->route('vouchers.index')->with('success', $pesan);
     }
 
@@ -434,11 +498,12 @@ class VoucherController extends Controller
 
         return response()->streamDownload(function () use ($batch) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['username', 'password', 'profil', 'harga', 'status', 'sinkron', 'dipakai', 'kedaluwarsa']);
+            fputcsv($out, ['nomor', 'username', 'password', 'profil', 'harga', 'status', 'sinkron', 'dipakai', 'kedaluwarsa']);
 
             $batch->vouchers()->orderBy('id')->chunk(500, function ($rows) use ($out) {
                 foreach ($rows as $v) {
                     fputcsv($out, [
+                        $v->nomor,
                         $v->username,
                         $v->password,
                         $v->profile,
@@ -466,9 +531,9 @@ class VoucherController extends Controller
             'status'   => ['nullable', 'string', 'max:20'],
             'sync'     => ['nullable', 'string', 'max:20'],
             'q'        => ['nullable', 'string', 'max:64'],
+            'mode'     => ['nullable', 'in:habis'],
         ]);
         $semua = (bool) ($data['semua'] ?? false);
-        $ids   = array_values(array_unique($data['ids'] ?? []));
 
         if (! Hash::check($data['password'], (string) $request->user()->password)) {
             ActivityLogService::log(
@@ -482,50 +547,54 @@ class VoucherController extends Controller
             return response()->json(['success' => false, 'error' => 'Password salah.'], 422);
         }
 
-        if ($semua ? empty($data['jumlah']) : ! $ids) {
-            return response()->json(['success' => false, 'error' => 'Belum ada kartu yang dipilih.'], 422);
+        $susun = $this->susunHapusKartu($batch, $data, true);
+
+        if ($susun instanceof JsonResponse) {
+            return $susun;
         }
 
-        if ($batch->sedangSinkron()) {
-            return response()->json(['success' => false, 'error' => 'Batch ini sedang disinkronkan ke router. Tunggu sampai selesai.'], 409);
-        }
+        ['kandidat' => $kandidat, 'tanpaRouter' => $tanpaRouter, 'wajibHabis' => $wajibHabis] = $susun;
+        $nilai = ['per_kartu' => [], 'ringkasan' => array_fill_keys(PencabutKartuService::HASIL, 0)];
 
-        $kartu = ($semua ? $this->saringKartu($batch->vouchers(), $data) : $batch->vouchers()->whereIn('id', $ids))
-            ->get(['id', 'username', 'status', 'expired_at', 'sync_status', 'sync_error']);
-        $jumlah = $kartu->count();
-
-        if ($jumlah > self::HAPUS_MASSAL_MAKS) {
-            return response()->json(['success' => false, 'error' => 'Maksimal ' . self::HAPUS_MASSAL_MAKS . ' kartu sekali hapus.'], 422);
-        }
-
-        if ($semua && $jumlah !== (int) $data['jumlah']) {
-            return response()->json(['success' => false, 'error' => "Jumlah kartu yang cocok berubah dari {$data['jumlah']} menjadi {$jumlah}. Muat ulang halaman lalu ulangi."], 409);
-        }
-
-        if (! $semua && $jumlah !== count($ids)) {
-            return response()->json(['success' => false, 'error' => 'Sebagian kartu yang dipilih tidak ada di batch ini. Muat ulang halaman lalu ulangi.'], 422);
-        }
-
-        $bentrok = fn (Voucher $v) => str_starts_with((string) $v->sync_error, VoucherService::BENTROK_PREFIX);
-        $cabut   = $kartu->reject($bentrok)->whereIn('sync_status', ['success', 'kirim'])->pluck('username')->all();
-        $hasil   = ['removed' => 0, 'missing' => 0];
-
-        if ($batch->router && $cabut) {
+        if ($kandidat->isNotEmpty()) {
             try {
-                $hasil = $this->routers->removeUsers($batch->router, $cabut);
+                $nilai = $this->pencabut->cabut($batch->router, $kandidat, $wajibHabis);
             } catch (Exception $e) {
-                return response()->json(['success' => false, 'error' => "Gagal menghapus dari router {$batch->router->name}: {$e->getMessage()} Tidak ada kartu yang dihapus dari panel."], 422);
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
             } finally {
                 $this->routers->disconnect($batch->router);
             }
         }
 
-        $rincian = $kartu->countBy(fn (Voucher $v) => $v->status_efektif)->sortKeys()->all();
+        $ringkas = $this->ringkasHapusKartu($susun, $nilai);
+        $kartu   = $kandidat->reject(fn (Voucher $v) => $this->ditahan($nilai, $v))->concat($tanpaRouter)->values();
 
-        DB::transaction(function () use ($batch, $kartu, $jumlah) {
-            Voucher::whereIn('id', $kartu->pluck('id'))->delete();
-            $batch->forceFill(['quantity' => max(0, (int) $batch->quantity - $jumlah)])->save();
-        });
+        if ($kartu->isEmpty()) {
+            return response()->json(
+                ['success' => false, 'error' => $ringkas['ditahan_total'] ? 'Semua kartu ditahan. ' . $ringkas['pesan'] : 'Tidak ada kartu yang memenuhi syarat untuk dihapus.']
+                    + Arr::only($ringkas, ['ringkasan', 'ditahan', 'ditahan_lain']),
+                422,
+            );
+        }
+
+        $jumlah    = $kartu->count();
+        $rincian   = $kartu->countBy(fn (Voucher $v) => $v->status_efektif)->sortKeys()->all();
+        $ringkasan = $nilai['ringkasan'];
+        $ditahan   = array_filter(Arr::only($ringkasan, PencabutKartuService::DITAHAN));
+
+        try {
+            DB::transaction(function () use ($batch, $kartu, $jumlah, $nilai, $request) {
+                $peta = $kartu->mapWithKeys(fn ($v) => [$v->id => [
+                    'hasil'   => $nilai['per_kartu'][$v->id]['hasil'] ?? 'tidak_dicabut',
+                    'keadaan' => $nilai['per_kartu'][$v->id]['keadaan'] ?? null,
+                ]])->all();
+                $this->terhapus->simpan($kartu->pluck('id')->all(), 'massal', $peta, $request->user()->id);
+                Voucher::whereIn('id', $kartu->pluck('id'))->delete();
+                $batch->forceFill(['quantity' => max(0, (int) $batch->quantity - $jumlah)])->save();
+            });
+        } catch (KartuBerubah $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 409);
+        }
         $this->vouchers->rangkumBatch($batch->refresh());
 
         ActivityLogService::log(
@@ -539,17 +608,195 @@ class VoucherController extends Controller
                 'rincian'             => $rincian,
                 'filter'              => $semua ? array_filter(array_intersect_key($data, ['status' => 1, 'sync' => 1, 'q' => 1])) : null,
                 'router'              => $batch->router?->slug,
-                'dicabut_router'      => $hasil['removed'],
-                'tidak_ada_di_router' => $hasil['missing'],
-                'dilewati_bentrok'    => $kartu->filter($bentrok)->count(),
+                'dicabut_router'         => $ringkasan['dicabut'],
+                'tidak_ada_di_router'    => $ringkasan['tidak_ada'],
+                'dilewati_bentrok'       => $tanpaRouter->filter(fn (Voucher $v) => $this->bentrok($v))->count(),
+                'dilewati_beda_password' => $ringkasan['beda_password'],
+                'gagal_cabut'            => $ringkasan['gagal'],
+                'ditahan'                => $ditahan,
+                'wajib_habis'            => $wajibHabis,
             ],
         );
 
+        $pesan = "{$jumlah} kartu dihapus dari panel" . ($ringkasan['dicabut'] ? ", {$ringkasan['dicabut']} di antaranya dicabut dari router." : '.')
+            . ($ringkas['ditahan_total'] ? " {$ringkas['ditahan_total']} kartu ditahan dan tetap ada di panel." : '');
+
+        if ($ringkas['ditahan_total']) {
+            $request->session()->flash($ringkasan['gagal'] ? 'error' : 'success', $pesan);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => "{$jumlah} kartu dihapus dari panel" . ($hasil['removed'] ? ", {$hasil['removed']} di antaranya dicabut dari router." : '.'),
+            'message' => $pesan,
             'jumlah'  => $jumlah,
+        ] + Arr::only($ringkas, ['ringkasan', 'ditahan', 'ditahan_lain']));
+    }
+
+    public function pratinjauHapusKartu(Request $request, VoucherBatch $batch): JsonResponse
+    {
+        $data = $request->validate([
+            'semua'  => ['nullable', 'boolean'],
+            'ids'    => ['nullable', 'array', 'max:' . self::HAPUS_MASSAL_MAKS],
+            'ids.*'  => ['integer'],
+            'jumlah' => ['nullable', 'integer', 'min:1'],
+            'status' => ['nullable', 'string', 'max:20'],
+            'sync'   => ['nullable', 'string', 'max:20'],
+            'q'      => ['nullable', 'string', 'max:64'],
+            'mode'   => ['nullable', 'in:habis'],
         ]);
+
+        $susun = $this->susunHapusKartu($batch, $data, false);
+
+        if ($susun instanceof JsonResponse) {
+            return $susun;
+        }
+
+        $nilai = ['per_kartu' => [], 'ringkasan' => array_fill_keys(PencabutKartuService::HASIL, 0)];
+
+        if ($susun['kandidat']->isNotEmpty()) {
+            try {
+                $nilai = $this->pencabut->nilai($batch->router, $susun['kandidat'], $susun['wajibHabis']);
+            } catch (Exception $e) {
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
+            } finally {
+                $this->routers->disconnect($batch->router);
+            }
+        }
+
+        $ringkas = $this->ringkasHapusKartu($susun, $nilai);
+
+        return response()->json([
+            'success'  => true,
+            'kandidat' => $susun['jumlah'],
+        ] + Arr::only($ringkas, ['ringkasan', 'ditahan', 'ditahan_lain', 'pesan']));
+    }
+
+    public function pratinjauHapusBatch(Request $request, VoucherBatch $batch): JsonResponse
+    {
+        if ($batch->sedangSinkron()) {
+            return response()->json(['success' => false, 'error' => 'Batch ini sedang disinkronkan ke router. Tunggu sampai selesai.'], 409);
+        }
+
+        $susun = $this->susunHapusBatch($batch, $batch->router !== null);
+        $nilai = ['per_kartu' => [], 'ringkasan' => array_fill_keys(PencabutKartuService::HASIL, 0)];
+
+        if ($susun['kandidat']->isNotEmpty()) {
+            try {
+                $nilai = $this->pencabut->nilai($batch->router, $susun['kandidat'], false);
+            } catch (Exception $e) {
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
+            } finally {
+                $this->routers->disconnect($batch->router);
+            }
+        }
+
+        $ringkas = $this->ringkasHapusKartu($susun, $nilai);
+
+        return response()->json([
+            'success'  => true,
+            'kandidat' => $susun['jumlah'],
+        ] + Arr::only($ringkas, ['ringkasan', 'ditahan', 'ditahan_lain', 'pesan']));
+    }
+
+    private function susunHapusBatch(VoucherBatch $batch, bool $denganRouter): array
+    {
+        $kartu = $batch->vouchers()
+            ->with('batch:id,created_at,validity,source')
+            ->orderBy('id')
+            ->get(['id', 'batch_id', 'nomor', 'username', 'password', 'comment', 'status', 'activated_at', 'expired_at', 'sync_status', 'sync_error']);
+
+        $terkirim    = fn (Voucher $v) => ! $this->bentrok($v) && in_array($v->sync_status, ['success', 'kirim'], true);
+        $kandidat    = $denganRouter ? $kartu->filter($terkirim)->values() : collect();
+        $tanpaRouter = $denganRouter ? $kartu->reject($terkirim)->values() : $kartu->values();
+
+        return ['kandidat' => $kandidat, 'tanpaRouter' => $tanpaRouter, 'wajibHabis' => false, 'jumlah' => $kartu->count()];
+    }
+
+    private function susunHapusKartu(VoucherBatch $batch, array $data, bool $eksekusi): array|JsonResponse
+    {
+        $semua      = (bool) ($data['semua'] ?? false);
+        $ids        = array_values(array_unique($data['ids'] ?? []));
+        $wajibHabis = ($data['mode'] ?? null) === 'habis';
+
+        if ($semua ? ($eksekusi && empty($data['jumlah'])) : ! $ids) {
+            return response()->json(['success' => false, 'error' => 'Belum ada kartu yang dipilih.'], 422);
+        }
+
+        if ($batch->sedangSinkron()) {
+            return response()->json(['success' => false, 'error' => 'Batch ini sedang disinkronkan ke router. Tunggu sampai selesai.'], 409);
+        }
+
+        if ($wajibHabis && ! $batch->router) {
+            return response()->json(['success' => false, 'error' => 'Batch ini tidak punya router, Habis tidak bisa dibuktikan.'], 422);
+        }
+
+        $query = $semua
+            ? $this->saringKartu($batch->vouchers(), $wajibHabis ? Arr::except($data, 'status') : $data)
+            : $batch->vouchers()->whereIn('id', $ids);
+        $kartu = $query
+            ->with('batch:id,created_at,validity,source')
+            ->get(['id', 'batch_id', 'nomor', 'username', 'password', 'comment', 'status', 'activated_at', 'expired_at', 'sync_status', 'sync_error']);
+
+        if (! $semua && $kartu->count() !== count($ids)) {
+            return response()->json(['success' => false, 'error' => 'Sebagian kartu yang dipilih tidak ada di batch ini. Muat ulang halaman lalu ulangi.'], 422);
+        }
+
+        $terkirim = fn (Voucher $v) => ! $this->bentrok($v) && in_array($v->sync_status, ['success', 'kirim'], true);
+
+        if (! $batch->router) {
+            $kandidat    = collect();
+            $tanpaRouter = $kartu->values();
+        } elseif ($wajibHabis) {
+            $kandidat    = $kartu->filter($terkirim)->values();
+            $tanpaRouter = collect();
+        } else {
+            $kandidat    = $kartu->filter($terkirim)->values();
+            $tanpaRouter = $kartu->reject($terkirim)->values();
+        }
+
+        $jumlah = $kandidat->count() + $tanpaRouter->count();
+
+        if ($jumlah > self::HAPUS_MASSAL_MAKS) {
+            return response()->json(['success' => false, 'error' => 'Maksimal ' . self::HAPUS_MASSAL_MAKS . ' kartu sekali hapus. Persempit dengan pencarian username.'], 422);
+        }
+
+        if ($eksekusi && $semua && $jumlah !== (int) $data['jumlah']) {
+            return response()->json(['success' => false, 'error' => "Jumlah kartu yang cocok berubah dari {$data['jumlah']} menjadi {$jumlah}. Muat ulang halaman lalu ulangi."], 409);
+        }
+
+        return ['kandidat' => $kandidat, 'tanpaRouter' => $tanpaRouter, 'wajibHabis' => $wajibHabis, 'jumlah' => $jumlah];
+    }
+
+    private function ringkasHapusKartu(array $susun, array $nilai): array
+    {
+        $ditahan = $susun['kandidat']
+            ->filter(fn (Voucher $v) => $this->ditahan($nilai, $v))
+            ->sortBy([['nomor', 'asc'], ['username', 'asc']])
+            ->values();
+        $ringkasan = $nilai['ringkasan'];
+        $panelSaja = $susun['tanpaRouter']->count();
+
+        return [
+            'ringkasan'     => $ringkasan,
+            'ditahan'       => $ditahan->take(100)->map(fn (Voucher $v) => [
+                'nomor'    => $v->nomor,
+                'username' => $v->username,
+                'alasan'   => PencabutKartuService::ALASAN[$nilai['per_kartu'][$v->id]['hasil']],
+            ])->all(),
+            'ditahan_lain'  => max(0, $ditahan->count() - 100),
+            'ditahan_total' => $ditahan->count(),
+            'pesan'         => "{$ringkasan['dicabut']} dicabut dari router, {$ringkasan['tidak_ada']} sudah tidak ada di router, {$panelSaja} dihapus dari panel saja, {$ditahan->count()} ditahan.",
+        ];
+    }
+
+    private function ditahan(array $nilai, Voucher $v): bool
+    {
+        return in_array($nilai['per_kartu'][$v->id]['hasil'] ?? null, PencabutKartuService::DITAHAN, true);
+    }
+
+    private function bentrok(Voucher $v): bool
+    {
+        return str_starts_with((string) $v->sync_error, VoucherService::BENTROK_PREFIX);
     }
 
     private function saringKartu($query, array $saring)
@@ -567,23 +814,45 @@ class VoucherController extends Controller
         }
 
         $hapusRouter = $request->boolean('remove_from_router') && $voucher->router
-            && ! str_starts_with((string) $voucher->sync_error, VoucherService::BENTROK_PREFIX);
+            && ! $this->bentrok($voucher)
+            && in_array($voucher->sync_status, ['success', 'kirim'], true);
+
+        $hasilRouter = null;
 
         if ($hapusRouter) {
             try {
-                $this->routers->removeUsers($voucher->router, [$voucher->username]);
+                $hasilRouter = $this->pencabut->cabut($voucher->router, collect([$voucher->load('batch')]), false)['per_kartu'][$voucher->id]['hasil'];
             } catch (Exception $e) {
                 return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
             } finally {
                 $this->routers->disconnect($voucher->router);
             }
+
+            if (in_array($hasilRouter, PencabutKartuService::DITAHAN, true)) {
+                return response()->json([
+                    'success' => false,
+                    'error'   => 'Kartu ditahan: ' . Str::lcfirst(PencabutKartuService::ALASAN[$hasilRouter]) . '.',
+                    'hasil'   => $hasilRouter,
+                ], 422);
+            }
         }
 
         $batch = $voucher->batch;
-        $voucher->delete();
+
+        try {
+            DB::transaction(function () use ($voucher, $batch, $hasilRouter, $request) {
+                $this->terhapus->simpan([$voucher->id], 'satu', $hasilRouter === null ? [] : [$voucher->id => ['hasil' => $hasilRouter, 'keadaan' => null]], $request->user()->id);
+                $voucher->delete();
+
+                if ($batch) {
+                    DB::table('voucher_batches')->where('id', $batch->id)->where('quantity', '>', 0)->decrement('quantity');
+                }
+            });
+        } catch (KartuBerubah $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 409);
+        }
 
         if ($batch) {
-            DB::table('voucher_batches')->where('id', $batch->id)->where('quantity', '>', 0)->decrement('quantity');
             $this->vouchers->rangkumBatch($batch->refresh());
         }
 
@@ -593,9 +862,13 @@ class VoucherController extends Controller
                 . ($hapusRouter ? " dan dari router {$voucher->router->name}." : '.'),
             subjectType: 'voucher',
             subjectId: (string) $voucher->id,
-            properties: ['router' => $voucher->router?->slug, 'batch_id' => $batch?->id, 'remove_from_router' => $hapusRouter],
+            properties: ['router' => $voucher->router?->slug, 'batch_id' => $batch?->id, 'remove_from_router' => $hapusRouter]
+                + ($hapusRouter ? ['hasil_router' => $hasilRouter] : []),
         );
 
-        return response()->json(['success' => true, 'message' => 'Voucher dihapus.']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Voucher dihapus.',
+        ]);
     }
 }

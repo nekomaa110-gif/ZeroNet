@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\DeletedVoucher;
 use App\Models\Router;
 use App\Models\Voucher;
 use App\Models\VoucherBatch;
@@ -64,10 +65,10 @@ class VoucherImportService
 
         try {
             $rencana = $this->rencana($router);
-            $idBatch = $this->simpanBatch($router, $rencana['batch'], $userId);
-            $masuk   = $this->simpanVoucher($router, $rencana['voucher'], $idBatch);
+            $batch   = $this->simpanBatch($router, $rencana['batch'], $userId);
+            $masuk   = $this->simpanVoucher($router, $rencana['voucher'], $batch);
 
-            foreach ($idBatch as $id) {
+            foreach ($batch['id'] as $id) {
                 $n = Voucher::where('batch_id', $id)->count();
                 VoucherBatch::whereKey($id)->update(['quantity' => $n, 'synced_count' => $n, 'status' => 'success', 'synced_at' => now()]);
             }
@@ -84,7 +85,7 @@ class VoucherImportService
 
             return [
                 'ringkasan'         => $rencana['ringkasan'],
-                'batch'             => count($idBatch),
+                'batch'             => count($batch['id']),
                 'masuk'             => $masuk,
                 'keadaan'           => $keadaan,
                 'penjualan_tertaut' => $tertaut,
@@ -96,10 +97,11 @@ class VoucherImportService
 
     private function simpanBatch(Router $router, array $batch, ?int $userId): array
     {
-        $id = [];
+        $id   = [];
+        $baru = [];
 
         foreach ($batch as $b) {
-            $id[$b['kode']] = VoucherBatch::firstOrCreate(['code' => $b['kode']], [
+            $model = VoucherBatch::firstOrCreate(['code' => $b['kode']], [
                 'router_id'   => $router->id,
                 'router_name' => $router->name,
                 'label'       => mb_substr($b['comment'], 0, 60),
@@ -113,20 +115,51 @@ class VoucherImportService
                 'status'      => 'success',
                 'source'      => 'mikhmon_import',
                 'created_by'  => $userId,
-            ])->id;
+            ]);
+
+            $id[$b['kode']]   = $model->id;
+            $baru[$b['kode']] = $model->wasRecentlyCreated;
         }
 
-        return $id;
+        return ['id' => $id, 'baru' => $baru];
     }
 
-    private function simpanVoucher(Router $router, array $voucher, array $idBatch): int
+    private function nomorAwal(int $batchId, bool $baru): ?int
+    {
+        if ($baru) {
+            return 0;
+        }
+
+        $hidup = Voucher::where('batch_id', $batchId);
+        $hapus = DeletedVoucher::where('batch_id', $batchId);
+
+        if ((clone $hidup)->whereNull('nomor')->exists() || (clone $hapus)->whereNull('nomor')->exists()) {
+            return null;
+        }
+
+        $maks = max((int) (clone $hidup)->max('nomor'), (int) (clone $hapus)->max('nomor'));
+
+        return $maks > 0 ? $maks : null;
+    }
+
+    private function simpanVoucher(Router $router, array $voucher, array $batch): int
     {
         $sekarang = now();
         $masuk    = 0;
+        $awal     = [];
+
+        foreach ($batch['id'] as $kode => $id) {
+            $awal[$kode] = $this->nomorAwal($id, $batch['baru'][$kode]);
+        }
+
+        foreach ($voucher as $i => $v) {
+            $voucher[$i]['nomor'] = $awal[$v['batch']] === null ? null : ++$awal[$v['batch']];
+        }
 
         foreach (array_chunk($voucher, self::POTONG) as $potong) {
             $masuk += DB::table('vouchers')->insertOrIgnore(array_map(fn ($v) => [
-                'batch_id'     => $idBatch[$v['batch']],
+                'batch_id'     => $batch['id'][$v['batch']],
+                'nomor'        => $v['nomor'],
                 'router_id'    => $router->id,
                 'username'     => $v['username'],
                 'password'     => $v['password'],

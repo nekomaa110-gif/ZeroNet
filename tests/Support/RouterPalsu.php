@@ -81,6 +81,16 @@ class RouterPalsu
         file_put_contents($this->berkas, json_encode($state), LOCK_EX);
     }
 
+    public function hapusBaris(string $jalur, string $nama, ?string $password = null): void
+    {
+        $state = $this->state();
+        $state['tabel'][$jalur] = array_values(array_filter(
+            $state['tabel'][$jalur] ?? [],
+            fn ($u) => ! (($u['name'] ?? null) === $nama && ($password === null || ($u['password'] ?? null) === $password)),
+        ));
+        file_put_contents($this->berkas, json_encode($state), LOCK_EX);
+    }
+
     public function hitung(): array
     {
         return $this->state()['hitung'];

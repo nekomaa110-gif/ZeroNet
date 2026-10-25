@@ -23,6 +23,27 @@
     </div>
   </header>
 
+  @if (session('harga_terlewat'))
+    <div class="alert tone-warn mb-4" role="status" x-data="{ show: true }" x-show="show">
+      <span class="alert-text">Reminder masa aktif untuk expire {{ session('harga_terlewat')['expire'] }} sudah terkirim tanpa tagihan. Buat invoice manual:</span>
+      <a href="{{ route('billing.create', ['username' => session('harga_terlewat')['username']]) }}" class="btn btn-sm">Buat invoice {{ session('harga_terlewat')['username'] }}</a>
+      <button @click="show = false" type="button" class="alert-close" aria-label="Tutup pesan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  @endif
+
+  @if (session('voucher_baru'))
+    <div class="alert tone-ok mb-4" role="status" x-data="{ show: true }" x-show="show">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <span class="alert-text">User <span class="mono">{{ session('voucher_baru') }}</span> berhasil dibuat. Voucher tidak dikirim lewat panel, buka lalu kirim sendiri.</span>
+      <a href="{{ route('user-hotspot.voucher', ['radius_user' => session('voucher_baru')]) }}" target="_blank" rel="noopener" class="btn btn-sm">Buka voucher</a>
+      <button @click="show = false" type="button" class="alert-close" aria-label="Tutup pesan">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  @endif
+
   @php
     $segments = [
       ['k' => '',         'l' => 'Semua',    'n' => $stats['total'],    'tone' => ''],
@@ -46,6 +67,7 @@
       <div class="toolbar">
         <input type="hidden" name="status" id="status-input" value="{{ $status }}" data-live-submit>
         <input type="hidden" name="sort" id="sort-input" value="{{ $sort }}" data-live-submit>
+        <input type="hidden" name="harga" id="harga-input" value="{{ $harga }}" data-live-submit>
 
         <div class="input-group tb-search">
           <svg class="ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -59,6 +81,11 @@
             <option value="{{ $g }}" {{ $group === $g ? 'selected' : '' }}>{{ $g }}</option>
           @endforeach
         </select>
+
+        <button type="button" class="tb-harga {{ $harga === 'kosong' ? 'active' : '' }}" data-harga-pick data-jumlah="{{ $tanpaHarga }}"
+                aria-pressed="{{ $harga === 'kosong' ? 'true' : 'false' }}">
+          Belum ada harga <span class="count {{ $tanpaHarga > 0 ? 'is-warn' : '' }}">{{ number_format($tanpaHarga) }}</span>
+        </button>
 
         <div class="seg" role="group" aria-label="Urutan">
           <button type="button" data-sort-pick="up" class="{{ $sort === 'up' ? 'active' : '' }}" aria-pressed="{{ $sort === 'up' ? 'true' : 'false' }}" aria-label="Urutkan naik">
@@ -97,6 +124,7 @@
       <h4 class="dr-section">Detail akun</h4>
       <div class="kvp"><span class="k">Username</span><span class="v mono" id="dr-username"></span></div>
       <div class="kvp"><span class="k">Paket</span><span class="v" id="dr-paket"></span></div>
+      <div class="kvp"><span class="k">Harga</span><span class="v" id="dr-harga"></span></div>
       <div class="kvp"><span class="k">Expire</span><span class="v mono" id="dr-expire"></span></div>
       <div class="kvp"><span class="k">Sisa waktu</span><span class="v mono" id="dr-remain"></span></div>
 
@@ -117,6 +145,19 @@
           </fieldset>
         @endif
         <p class="dr-inv-note" id="dr-invoice-note"></p>
+      </div>
+
+      <div id="dr-kirim" class="dr-kirim" hidden>
+        <h4 class="dr-section">Kirim voucher WA</h4>
+        <div class="kvp"><span class="k">Status</span><span class="v" id="dr-kirim-label"></span></div>
+        <form method="POST" id="dr-kirim-form" action="#" hidden
+              data-confirm-title="Kirim Ulang Voucher"
+              data-confirm-action="Kirim ulang"
+              data-confirm-variant="info"
+              style="margin-top:10px">
+          @csrf
+          <button type="submit" class="btn btn-sm">Kirim ulang voucher</button>
+        </form>
       </div>
 
       <h4 class="dr-section">Pengingat WA</h4>
@@ -181,6 +222,21 @@
           });
         });
 
+        document.querySelectorAll('[data-harga-pick]').forEach(btn => {
+          if (btn._bound) return;
+          btn._bound = true;
+          btn.addEventListener('click', () => {
+            const hidden = document.getElementById('harga-input');
+            if (!hidden) return;
+            hidden.value = hidden.value === 'kosong' ? '' : 'kosong';
+            const aktif = hidden.value === 'kosong';
+            btn.classList.toggle('active', aktif);
+            btn.setAttribute('aria-pressed', aktif ? 'true' : 'false');
+            hidden.dispatchEvent(new Event('input', { bubbles: true }));
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+        });
+
         document.querySelectorAll('[data-sort-pick]').forEach(btn => {
           if (btn._bound) return;
           btn._bound = true;
@@ -209,6 +265,22 @@
       const editTpl    = '{{ route('user-hotspot.edit', ['radius_user' => '__NAME__']) }}';
       const voucherTpl = '{{ route('user-hotspot.voucher', ['radius_user' => '__NAME__']) }}';
       const extendTpl  = '{{ route('user-hotspot.extend', ['radius_user' => '__NAME__']) }}';
+      const kirimTpl   = '{{ route('user-hotspot.kirim-voucher', ['radius_user' => '__NAME__']) }}';
+      const kirimBox   = document.getElementById('dr-kirim');
+      const kirimForm  = document.getElementById('dr-kirim-form');
+
+      function isiKiriman(ds, username) {
+        kirimBox.hidden = !ds.kirimStatus;
+        document.getElementById('dr-kirim-label').textContent = ds.kirimLabel || '';
+        kirimForm.hidden = ds.kirimUlang !== '1';
+        kirimForm.action = kirimTpl.replace('__NAME__', encodeURIComponent(username));
+        const peringatan = ds.kirimPeringatan === '1';
+        kirimForm.setAttribute('data-confirm', peringatan
+          ? 'Voucher mungkin sudah sampai. Cek WhatsApp pelanggan dulu sebelum mengirim ulang.\n\nKirim ulang voucher ' + username + '?'
+          : 'Kirim ulang voucher ' + username + ' lewat WhatsApp?');
+        kirimForm.setAttribute('data-confirm-variant', peringatan ? 'warning' : 'info');
+        kirimForm.dataset.zcConfirmed = '';
+      }
 
       const EXTEND_DAYS = 30;
       const extendForm  = document.getElementById('dr-extend-form');
@@ -321,6 +393,9 @@
 
         document.getElementById('dr-username').textContent = username;
         document.getElementById('dr-paket').textContent    = paket;
+        const hargaEl = document.getElementById('dr-harga');
+        hargaEl.textContent = ds.hargaLabel || '';
+        hargaEl.classList.toggle('is-warn', ds.hargaTone === 'warn');
         document.getElementById('dr-expire').textContent   = expire;
         document.getElementById('dr-remain').textContent   = remain;
 
@@ -329,7 +404,7 @@
         fillSession('dr-last', lastLog,                  '');
         fillSession('dr-rxtx', (rx && tx) ? rx + ' / ' + tx : '', '');
 
-        document.getElementById('dr-edit').href   = editTpl.replace('__NAME__', encodeURIComponent(username));
+        document.getElementById('dr-edit').href   = ds.editUrl || editTpl.replace('__NAME__', encodeURIComponent(username));
         document.getElementById('dr-print').href  = voucherTpl.replace('__NAME__', encodeURIComponent(username));
 
         extendForm.action = extendTpl.replace('__NAME__', encodeURIComponent(username));
@@ -342,6 +417,7 @@
           (preview.fromExpired ? '\n\nMasa aktif sudah lewat, dihitung dari hari ini.' : '');
         isiInvoice(ds);
         extendForm.dataset.zcConfirmed = '';
+        isiKiriman(ds, username);
 
         lastRow = row;
         drawer.classList.add('open');

@@ -1,0 +1,16 @@
+[
+  {"nama": "sukses", "http": 200, "body": {"ok": true, "id": "MSG1", "png_bytes": 1234}, "status_panel": "terkirim", "alasan_panel": null},
+  {"nama": "bukan_wa", "http": 404, "body": {"ok": false, "error": "number_not_on_whatsapp"}, "status_panel": "gagal", "alasan_panel": "Nomor ini tidak terdaftar di WhatsApp"},
+  {"nama": "belum_tersambung", "http": 503, "body": {"ok": false, "error": "wa_not_ready", "status": "connecting", "needs_qr": false}, "status_panel": "gagal", "alasan_panel": "Gateway WA belum tersambung"},
+  {"nama": "batas_kirim", "http": 429, "body": "Too many requests, please try again later.", "status_panel": "gagal", "alasan_panel": "Batas kirim gateway tercapai, coba lagi sebentar"},
+  {"nama": "render_gagal", "http": 500, "body": {"ok": false, "error": "Navigation timeout of 15000 ms exceeded", "code": "render_failed"}, "status_panel": "gagal", "alasan_panel": "Gambar voucher gagal dibuat (Navigation timeout of 15000 ms exceeded)"},
+  {"nama": "tenggat", "http": 500, "body": {"ok": false, "error": "deadline exceeded", "code": "deadline_exceeded"}, "status_panel": "gagal", "alasan_panel": "Gateway terlalu lama menyiapkan kiriman, belum terkirim"},
+  {"nama": "permintaan_salah", "http": 400, "body": {"ok": false, "error": "html required", "code": "invalid_request"}, "status_panel": "gagal", "alasan_panel": "Permintaan ditolak gateway (html required)"},
+  {"nama": "kunci_salah", "http": 401, "body": {"ok": false, "error": "unauthorized"}, "status_panel": "gagal", "alasan_panel": "Kunci API gateway salah"},
+  {"nama": "cek_nomor_gagal", "http": 500, "body": {"ok": false, "error": "Timed Out", "code": "check_failed"}, "status_panel": "gagal", "alasan_panel": "Gateway gagal memeriksa nomor WhatsApp"},
+  {"nama": "endpoint_belum_ada", "http": 404, "body": "<!DOCTYPE html><html><body><pre>Cannot POST /send-image-html</pre></body></html>", "status_panel": "gagal", "alasan_panel": "Gateway belum mendukung kirim voucher"},
+  {"nama": "proxy_502", "http": 502, "body": "Bad Gateway", "status_panel": "belum_pasti", "alasan_panel": "Hasil kiriman tidak pasti; pesan mungkin sudah sampai"},
+  {"nama": "json_rusak", "http": 200, "body": "{ok:true,", "status_panel": "belum_pasti", "alasan_panel": "Hasil kiriman tidak pasti; pesan mungkin sudah sampai"},
+  {"nama": "kirim_gagal", "http": 500, "body": {"ok": false, "error": "Connection Closed", "code": "send_failed"}, "status_panel": "belum_pasti", "alasan_panel": "Hasil kiriman tidak pasti; pesan mungkin sudah sampai"},
+  {"nama": "galat_lain", "http": 500, "body": {"ok": false, "error": "boom"}, "status_panel": "belum_pasti", "alasan_panel": "Hasil kiriman tidak pasti; pesan mungkin sudah sampai"}
+]

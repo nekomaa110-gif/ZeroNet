@@ -220,6 +220,12 @@ function layani($conn, string $berkas): void
             kirim($conn, ['!done', '=ret=' . $id], $tag);
             continue;
         } elseif ($aksi === 'print') {
+            if (! empty($sk['putus_saat_baca_ulang']) && $jalur === '/ip/hotspot/user' && ($state['hitung']['remove'][$jalur] ?? 0) > 0) {
+                $state['skenario']['putus_saat_baca_ulang'] = false;
+                simpan($berkas, $state);
+
+                return;
+            }
             $state['hitung']['print'][$jalur] = ($state['hitung']['print'][$jalur] ?? 0) + (array_key_exists('count-only', $param) ? 0 : 1);
             $state['hitung']['hitung'][$jalur] = ($state['hitung']['hitung'][$jalur] ?? 0) + (array_key_exists('count-only', $param) ? 1 : 0);
             simpan($berkas, $state);
@@ -243,6 +249,9 @@ function layani($conn, string $berkas): void
             foreach ($baris as $u) {
                 $kata = ['!re'];
                 foreach ($u as $k => $v) {
+                    if ($k === 'password' && ! empty($state['skenario']['sembunyikan_password'])) {
+                        continue;
+                    }
                     if ($props === null || in_array($k, $props, true)) {
                         $kata[] = "={$k}={$v}";
                     }
@@ -270,8 +279,31 @@ function layani($conn, string $berkas): void
         } elseif ($aksi === 'remove') {
             $ids = explode(',', $param['.id'] ?? '');
             $state['hitung']['remove'][$jalur] = ($state['hitung']['remove'][$jalur] ?? 0) + count($ids);
-            $state['tabel'][$jalur] = array_values(array_filter($state['tabel'][$jalur], fn ($u) => ! in_array($u['.id'], $ids, true)));
+            $namaDiminta = array_column(array_filter($state['tabel'][$jalur], fn ($u) => in_array($u['.id'], $ids, true)), 'name');
+            if (array_intersect($namaDiminta, $state['skenario']['remove_gagal'] ?? []) !== []) {
+                simpan($berkas, $state);
+                kirim($conn, ['!trap', '=message=failure: ditolak (uji)'], $tag);
+                kirim($conn, ['!done'], $tag);
+                continue;
+            }
+            $hilang = array_intersect($namaDiminta, $state['skenario']['remove_hilang'] ?? []) !== [];
+            $diam = (array) ($state['skenario']['remove_diam'] ?? []);
+            $state['tabel'][$jalur] = array_values(array_filter(
+                $state['tabel'][$jalur],
+                fn ($u) => ! in_array($u['.id'], $ids, true) || in_array($u['name'] ?? null, $diam, true),
+            ));
             simpan($berkas, $state);
+
+            if (! empty($sk['putus_setelah_remove']) && $jalur === '/ip/hotspot/user' && $state['hitung']['remove'][$jalur] >= (int) $sk['putus_setelah_remove']) {
+                $state['skenario']['putus_setelah_remove'] = null;
+                simpan($berkas, $state);
+
+                return;
+            }
+
+            if ($hilang) {
+                kirim($conn, ['!trap', '=message=no such item'], $tag);
+            }
             kirim($conn, ['!done'], $tag);
             continue;
         }

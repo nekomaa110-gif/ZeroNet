@@ -140,7 +140,7 @@ class VoucherPushTest extends TestCase
         $this->assertTrue(Cache::lock('router.tulis.uji', 1)->get());
 
         $mulai = microtime(true);
-        $hasil = app(\App\Services\VoucherRouterService::class)->removeUsers($this->router, ['kode1']);
+        $hasil = app(\App\Services\VoucherRouterService::class)->removeUsers($this->router, $batch->vouchers()->where('username', 'kode1')->get());
 
         $this->assertGreaterThanOrEqual(0.9, microtime(true) - $mulai);
         $this->assertSame(1, $hasil['removed']);

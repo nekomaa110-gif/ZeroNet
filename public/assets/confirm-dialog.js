@@ -11,6 +11,8 @@
     .zc-backdrop.zc-open { opacity: 1; }
     .zc-modal {
       width: 100%; max-width: 440px; overflow: hidden;
+      display: flex; flex-direction: column;
+      max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
       background: var(--surface, #fff); color: var(--ink, #141815);
       border: 1px solid var(--line, #D3D9D5); border-radius: var(--r-xl, 8px);
       box-shadow: var(--shadow-pop, 0 16px 40px -12px rgba(10,14,12,.32));
@@ -25,8 +27,16 @@
     .zc-icon.zc-info    { background: var(--brand-tint); color: var(--brand-ink); }
     .zc-icon svg { width: 20px; height: 20px; }
     .zc-title { margin: 0; padding-top: 7px; font-size: 16px; font-weight: 600; line-height: 1.35; }
-    .zc-body { padding: 4px 22px 20px 74px; color: var(--ink-2, #434B46); font-size: 14px; line-height: 1.5; }
+    .zc-body { padding: 4px 22px 20px 74px; color: var(--ink-2, #434B46); font-size: 14px; line-height: 1.5; overflow-y: auto; min-height: 0; }
     .zc-body p { margin: 0; white-space: pre-wrap; }
+    .zc-detail {
+      margin: 10px 0 0; padding: 4px 10px; list-style: none;
+      max-height: min(180px, 28vh); overflow-y: auto; overscroll-behavior: contain;
+      background: var(--sunken, #F1F3F2); border: 1px solid var(--line, #D3D9D5); border-radius: var(--r-md, 4px);
+      font-size: 12.5px; line-height: 1.45; color: var(--ink-2, #434B46);
+    }
+    .zc-detail li { padding: 5px 0; overflow-wrap: anywhere; }
+    .zc-detail li + li { border-top: 1px solid var(--line, #D3D9D5); }
     .zc-pwd-field { margin-top: 14px; }
     .zc-pwd-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
     .zc-pwd-input {
@@ -83,6 +93,7 @@
     const cancel  = opts.cancel  || 'Batal';
     const needPwd = !!opts.requirePassword;
     const pwdLabel = opts.passwordLabel || 'Password Anda';
+    const detail  = Array.isArray(opts.detail) ? opts.detail : [];
 
     return new Promise(function (resolve) {
       const backdrop = document.createElement('div');
@@ -111,6 +122,16 @@
 
       backdrop.querySelector('.zc-title').textContent = title;
       backdrop.querySelector('.zc-body p').textContent = message;
+      if (detail.length) {
+        const daftar = document.createElement('ul');
+        daftar.className = 'zc-detail';
+        detail.forEach(function (baris) {
+          const item = document.createElement('li');
+          item.textContent = String(baris);
+          daftar.appendChild(item);
+        });
+        backdrop.querySelector('.zc-body p').after(daftar);
+      }
       backdrop.querySelector('.zc-btn-cancel').textContent = cancel;
       backdrop.querySelector('.zc-btn-confirm').textContent = action;
 
